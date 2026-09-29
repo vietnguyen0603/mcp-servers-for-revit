@@ -371,4 +371,5 @@ FodyWeavers.xsd
 # =============================================================================
 .claude/
 .opencode/
+opencode.json
 .DS_Store
