@@ -57,6 +57,9 @@ Restart Claude Desktop. When you see the hammer icon, the MCP server is connecte
 | `tag_all_walls` | Tag all walls in the current view |
 | `tag_all_rooms` | Tag all rooms in the current view |
 | `export_room_data` | Export all room data from the project |
+| `get_grid_register_data` | Return register-ready grid data (one record per grid, axis family and coordinate in mm) |
+| `get_column_wall_register_data` | Return register-ready column and wall data (one record per physical column or wall leg in mm) |
+| `get_beam_register_data` | Return register-ready beam data with start/end supports and face-to-face clear span (mm) |
 | `store_project_data` | Store project metadata in local database |
 | `store_room_data` | Store room metadata in local database |
 | `query_stored_data` | Query stored project and room data |

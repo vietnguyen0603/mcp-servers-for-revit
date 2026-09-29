@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AssemblyName>RegisterGeometry</AssemblyName>
+    <RootNamespace>RegisterGeometry</RootNamespace>
+    <Description>
+      Pure 2D geometry, topology, clustering, support ranking, and paging
+      primitives for the Revit MCP register extraction tools. Targets
+      netstandard2.0 so the same assembly can be consumed by both the
+      net48 (R20-R24) and net8.0-windows (R25-R26) command-set projects.
+      Intentionally free of any Autodesk.Revit.* dependency.
+    </Description>
+  </PropertyGroup>
+
+  <!--
+    The library is intentionally dependency-free: no Newtonsoft.Json, no
+    Revit API references. Consumers (the command set) provide their own
+    DTOs and unit conversion adapters.
+  -->
+
+</Project>

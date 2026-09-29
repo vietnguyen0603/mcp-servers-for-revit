@@ -122,6 +122,21 @@
       "commandName": "create_dimensions",
       "description": "Create dimension annotations between elements or points in the current view",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_grid_register_data",
+      "description": "Return register-ready grid data: one record per physical grid instance with axis family, direction, and coordinate in millimetres (mm).",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_column_wall_register_data",
+      "description": "Return register-ready column and wall data: one record per physical column or wall leg with mark, family/type, shape, plan dimensions in millimetres (mm), nearest reference grids, signed face offsets, and notes.",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_beam_register_data",
+      "description": "Return register-ready beam data: one record per physical beam instance with mark/type, section size, level, axis/from/to grids, model and clear lengths, start/end coordinates and supports in millimetres (mm). Clear span is face-to-face and is null when support faces cannot be established.",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

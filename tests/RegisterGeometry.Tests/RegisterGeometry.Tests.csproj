@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Pure non-Revit test project. Targets net8.0 so it runs as a normal
+         command-line application. Cannot be invoked by dotnet test against
+         the Revit-bound test SDK; use `dotnet run` against this project
+         directly. -->
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>RegisterGeometry.Tests</RootNamespace>
+    <AssemblyName>RegisterGeometry.Tests</AssemblyName>
+    <NoWarn>$(NoWarn);CS8002;AOT000</NoWarn>
+    <!-- TUnit requires Microsoft.Testing.Platform which is already pinned via global.json. -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" Version="1.71.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\commandset\RegisterGeometry\RegisterGeometry.csproj" />
+  </ItemGroup>
+
+</Project>

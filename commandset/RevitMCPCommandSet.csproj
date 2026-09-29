@@ -65,6 +65,24 @@
       <Reference Include="System.Net.Http" />
     </ItemGroup>
 
+    <!-- The RegisterGeometry project lives in a sub-folder, so by default
+         MSBuild would auto-include its .cs files in this assembly and emit
+         duplicate type definitions. Exclude the subtree explicitly. -->
+    <ItemGroup>
+      <Compile Remove="RegisterGeometry\**" />
+      <None Remove="RegisterGeometry\**" />
+      <EmbeddedResource Remove="RegisterGeometry\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- Pure 2D geometry, topology, clustering, support ranking, and paging
+           primitives shared by the register extraction tools. The library is
+           netstandard2.0 so the same assembly is consumed here regardless of
+           whether the command set is built for net48 (R20-R24) or
+           net8.0-windows (R25-R26). -->
+      <ProjectReference Include="RegisterGeometry\RegisterGeometry.csproj" />
+    </ItemGroup>
+
     <Target Name="DeployCommandSet" AfterTargets="Build">
         <PropertyGroup>
             <PluginAddInRoot>$(ProjectDir)..\plugin\bin\AddIn $(RevitVersion) $(Configuration)\revit_mcp_plugin\</PluginAddInRoot>
