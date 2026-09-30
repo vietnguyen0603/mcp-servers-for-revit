@@ -2,8 +2,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  ToolCatalog,
+  readCatalogOptions,
+  type CatalogOptions,
+} from "../catalog/ToolCatalog.js";
+import { registerCatalogTools } from "../catalog/metaTools.js";
 
-export async function registerTools(server: McpServer) {
+export async function registerTools(
+  server: McpServer,
+  options: CatalogOptions = readCatalogOptions()
+): Promise<ToolCatalog> {
+  const catalog = new ToolCatalog(server);
+  const capturingServer = catalog.capturingServer();
+
   // 获取当前文件的目录路径
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -36,7 +48,7 @@ export async function registerTools(server: McpServer) {
       );
 
       if (registerFunctionName) {
-        module[registerFunctionName](server);
+        module[registerFunctionName](capturingServer);
         console.error(`已注册工具: ${file}`);
       } else {
         console.warn(`警告: 在文件 ${file} 中未找到注册函数`);
@@ -45,4 +57,13 @@ export async function registerTools(server: McpServer) {
       console.error(`注册工具 ${file} 时出错:`, error);
     }
   }
+
+  // 按目录（catalog）决定暴露哪些工具，并在 dynamic 模式下注册目录元工具
+  catalog.finalize(options);
+  if (options.mode === "dynamic") {
+    registerCatalogTools(server, catalog);
+  }
+  console.error(`Tool mode: ${options.mode}`);
+
+  return catalog;
 }
