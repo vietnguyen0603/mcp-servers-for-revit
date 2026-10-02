@@ -37,8 +37,30 @@ export const CATALOGS: readonly CatalogDefinition[] = [
   {
     id: "annotate",
     title: "Annotate / Drafting",
-    description: "Documentation in the active view: dimensions, wall tags and room tags.",
-    aliases: ["drafting", "annotation", "documentation", "tag", "tags", "dimension", "dimensions"],
+    description:
+      "Annotation in a view: dimensions, grid dimensions, spot elevations, tags, text notes, detail lines, filled regions, detail components, revision clouds, rebar annotation and tag cleanup.",
+    aliases: ["drafting", "annotation", "documentation", "tag", "tags", "dimension", "dimensions", "text"],
+  },
+  {
+    id: "views",
+    title: "View / Sheets",
+    description:
+      "Views, sheets, viewports and schedules: create and list them, place and align views on sheets, templates, filters, graphic overrides, crop and view range, revisions, and PDF/DWG/image export.",
+    aliases: [
+      "sheet",
+      "sheets",
+      "viewport",
+      "viewports",
+      "titleblock",
+      "schedule",
+      "schedules",
+      "section",
+      "elevation",
+      "export",
+      "pdf",
+      "revision",
+      "revisions",
+    ],
   },
   {
     id: "modify",
@@ -50,7 +72,7 @@ export const CATALOGS: readonly CatalogDefinition[] = [
     id: "analyze",
     title: "Analyze",
     description: "Model statistics, material quantities and room data exports.",
-    aliases: ["analysis", "quantities", "quantity", "takeoff", "statistics", "schedule"],
+    aliases: ["analysis", "quantities", "quantity", "takeoff", "statistics"],
   },
   {
     id: "data",
