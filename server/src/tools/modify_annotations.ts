@@ -82,12 +82,27 @@ const operationSchema = z.discriminatedUnion("action", [
     })
     .strict()
     .describe("Set dimension value override/prefix/suffix/above/below ('text' = all segments, 'segments' = by index)"),
+  z
+    .object({
+      action: z.literal("mirror"),
+      elementIds,
+      axis: z.object({ start: point3Schema, end: point3Schema }).strict().describe("Mirror axis in the view plane (mm)"),
+      copy: z.boolean().optional().default(false).describe("Keep the originals and mirror copies"),
+    })
+    .strict()
+    .describe("Mirror about an axis line in the view plane"),
+  z
+    .object({ action: z.literal("flip"), elementIds })
+    .strict()
+    .describe(
+      "Flip detail components in place: line-based items reverse their line direction (a break line then masks the other side), point-based items flip hand/facing or mirror about their own vertical axis"
+    ),
 ]);
 
 export function registerModifyAnnotationsTool(server: McpServer) {
   server.tool(
     "modify_annotations",
-    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below) and addLeaders/setLeaders/removeLeaders (text notes). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
+    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below), addLeaders/setLeaders/removeLeaders (text notes), mirror (about an axis, optionally as copies) and flip (detail components; flipping a break line swaps its masked side). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
     {
       operations: z
         .array(operationSchema)

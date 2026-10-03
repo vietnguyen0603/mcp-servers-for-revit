@@ -165,9 +165,27 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                         dimensions = elements.Select(e => DimensionUtils.Describe(doc, (Dimension)e)) };
                 }
 
+                case "mirror":
+                {
+                    var view = OwnerView(doc, elements[0]);
+                    var axis = op["axis"] ?? throw new ArgumentException("'axis' {start, end} is required.");
+                    var a = DetailGeometry.ReadPoint(view, axis["start"], "axis.start");
+                    var b = DetailGeometry.ReadPoint(view, axis["end"], "axis.end");
+                    if (a.IsAlmostEqualTo(b))
+                        throw new ArgumentException("'axis' start and end coincide.");
+                    // The mirror plane contains the axis and the view direction.
+                    var normal = (b - a).CrossProduct(view.ViewDirection).Normalize();
+                    var copy = op.Value<bool?>("copy") ?? false;
+                    var mirrored = ElementTransformUtils.MirrorElements(doc, ids, Plane.CreateByNormalAndOrigin(normal, a), copy);
+                    return new { action, elementIds = ids.Select(i => i.GetValue()), newIds = copy ? mirrored?.Select(i => i.GetValue()) : null };
+                }
+
+                case "flip":
+                    return new { action, flipped = elements.Select(e => new { elementId = e.Id.GetValue(), method = Flip(doc, e) }).ToList() };
+
                 default:
                     throw new ArgumentException(
-                        $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setType or setParameters.");
+                        $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setType, setParameters, addLeaders, setLeaders, removeLeaders, setDimensionText, mirror or flip.");
             }
         }
 
@@ -236,6 +254,35 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 throw new ArgumentException($"Type '{name}' not found for element {element.Id.GetValue()}. Valid: " +
                                             string.Join(", ", valid.Select(id => doc.GetElement(id)?.Name).Distinct().Take(30)) + ".");
             return match;
+        }
+
+        /// <summary>
+        ///     Flips a detail family instance in place: line-based items reverse their location curve
+        ///     (swapping the side a break line masks), point-based items flip hand/facing or, failing
+        ///     that, are mirrored about their own vertical axis. Returns the method used.
+        /// </summary>
+        private static string Flip(Document doc, Element element)
+        {
+            var instance = Require<FamilyInstance>(element, "flip");
+            if (instance.Location is LocationCurve location)
+            {
+                location.Curve = location.Curve.CreateReversed();
+                return "reverseCurve";
+            }
+
+            if (instance.CanFlipHand && instance.flipHand())
+                return "flipHand";
+            if (instance.CanFlipFacing && instance.flipFacing())
+                return "flipFacing";
+
+            var view = OwnerView(doc, instance);
+            var origin = (instance.Location as LocationPoint)?.Point
+                         ?? throw new ArgumentException($"Element {instance.Id.GetValue()} has no location to flip about.");
+            var hand = instance.HandOrientation;
+            var normal = hand == null || hand.IsZeroLength() ? view.RightDirection : hand.Normalize();
+            ElementTransformUtils.MirrorElements(doc, new List<ElementId> { instance.Id },
+                Plane.CreateByNormalAndOrigin(normal, origin), false);
+            return "mirror";
         }
     }
 }

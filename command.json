@@ -219,6 +219,21 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "array_annotations",
+      "description": "Copy view-specific elements in a linear array or to a list of points",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_detail_groups",
+      "description": "List detail group types with instance and member counts",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "modify_detail_groups",
+      "description": "Place, create or ungroup detail groups",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "capture_view",
       "description": "Zoom the active view to fit and capture it as a PNG",
       "assemblyPath": "RevitMCPCommandSet.dll"
