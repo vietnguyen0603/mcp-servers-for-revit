@@ -6,6 +6,7 @@ import {
   point3Schema,
   sendDocumentationCommand,
 } from "../utils/documentationSchemas.js";
+import { dimensionSegmentsTextSchema, dimensionTextSchema } from "../utils/dimensionSchemas.js";
 
 const elementIds = z.array(elementIdSchema).min(1).max(1000).describe("Elements to change");
 
@@ -50,12 +51,21 @@ const operationSchema = z.discriminatedUnion("action", [
     .strict()
     .describe("Change the type of text notes, dimensions, filled regions or detail components"),
   z.object({ action: z.literal("setParameters"), elementIds, parameters: parameterValuesSchema }).strict(),
+  z
+    .object({
+      action: z.literal("setDimensionText"),
+      elementIds,
+      text: dimensionTextSchema.optional(),
+      segments: dimensionSegmentsTextSchema.optional(),
+    })
+    .strict()
+    .describe("Set dimension value override/prefix/suffix/above/below ('text' = all segments, 'segments' = by index)"),
 ]);
 
 export function registerModifyAnnotationsTool(server: McpServer) {
   server.tool(
     "modify_annotations",
-    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types) and setParameters. Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
+    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters and setDimensionText (dimension override/prefix/suffix/above/below). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
     {
       operations: z
         .array(operationSchema)
@@ -65,6 +75,9 @@ export function registerModifyAnnotationsTool(server: McpServer) {
           ops.forEach((op, i) => {
             if (op.action === "setType" && op.typeId === undefined && op.typeName === undefined) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "setType needs typeId or typeName" });
+            }
+            if (op.action === "setDimensionText" && !op.text && !op.segments) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "setDimensionText needs text or segments" });
             }
           })
         ),

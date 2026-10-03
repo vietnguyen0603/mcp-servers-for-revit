@@ -120,6 +120,25 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     return new { action, elementIds = ids.Select(i => i.GetValue()) };
                 }
 
+                case "setDimensionText":
+                {
+                    if (!DimensionUtils.HasText(op))
+                        throw new ArgumentException("setDimensionText needs 'text' or 'segments'.");
+                    var warnings = new List<string>();
+                    var applied = 0;
+                    foreach (var e in elements)
+                    {
+                        var itemWarnings = new List<string>();
+                        applied += DimensionUtils.ApplyText(Require<Dimension>(e, action), op, itemWarnings);
+                        warnings.AddRange(itemWarnings.Select(w => $"{e.Id.GetValue()}: {w}"));
+                    }
+                    if (applied == 0)
+                        throw new ArgumentException("No dimension text was applied. " + string.Join(" ", warnings));
+                    doc.Regenerate();
+                    return new { action, elementIds = ids.Select(i => i.GetValue()), applied, warnings,
+                        dimensions = elements.Select(e => DimensionUtils.Describe(doc, (Dimension)e)) };
+                }
+
                 default:
                     throw new ArgumentException(
                         $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setType or setParameters.");
