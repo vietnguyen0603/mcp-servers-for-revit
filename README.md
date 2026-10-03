@@ -167,6 +167,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `tag_all_rooms` | annotate | Tag all rooms in the current view |
 | `tag_elements` | annotate | Tag elements of any category in a view (by id or category, skipping already-tagged) |
 | `create_text_note` | annotate | Create text notes in a view or on a sheet |
+| `list_drafting_types` | annotate, views | List text, dimension, filled region, line style, viewport and title block types |
 | `create_detail_lines` | annotate | Create detail lines and arcs with a line style |
 | `create_filled_region` | annotate | Create filled or masking regions from boundary loops |
 | `place_detail_component` | annotate | Place point- or line-based detail components |
@@ -197,6 +198,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `set_crop_region` | views | Set or fit the crop region of views |
 | `set_view_range` | views | Set the view range of plan views |
 | `align_viewports` | views | Align viewports across sheets |
+| `update_viewports` | views | Renumber, retype, move, anchor and adjust titles of placed viewports |
 | `export_room_data` | analyze, architecture | Export all room data from the project |
 | `get_grid_register_data` | structure | Return register-ready grid data (one record per grid, axis family and coordinate in mm) |
 | `get_column_wall_register_data` | structure | Return register-ready column and wall data (one record per physical column or wall leg in mm) |

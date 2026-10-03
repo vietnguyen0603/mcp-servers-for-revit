@@ -357,6 +357,16 @@
       "commandName": "layout_detail_sheet",
       "description": "Lay out views on a detail sheet in a module grid and number them",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_drafting_types",
+      "description": "List text, dimension, filled region, line style, viewport and title block types",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "update_viewports",
+      "description": "Renumber, retype, move, anchor and adjust titles of placed viewports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

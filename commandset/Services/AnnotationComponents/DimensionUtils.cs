@@ -5,8 +5,9 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 {
     /// <summary>
     ///     Dimension helpers shared by create_dimensions and modify_annotations:
-    ///     type resolution by id/name, text (override/prefix/suffix/above/below)
-    ///     on the dimension or its segments, and a millimetre summary.
+    ///     type resolution by id/name, text (override/prefix/suffix/above/below,
+    ///     text position and leader) on the dimension or its segments, and a
+    ///     millimetre summary.
     /// </summary>
     internal static class DimensionUtils
     {
@@ -73,7 +74,13 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 if (segmentCount > 1)
                 {
                     for (var i = 0; i < segmentCount; i++)
-                        applied += ApplyFields(new SegmentText(dimension.Segments.get_Item(i)), text, $"segment {i}", warnings);
+                        applied += ApplyFields(new SegmentText(dimension, dimension.Segments.get_Item(i)), text,
+                            $"segment {i}", warnings, includePlacement: false);
+                    if (IsSet(text["position"]))
+                        warnings.Add("text.position is ignored on a multi-segment dimension; use segments[].position.");
+                    if (IsSet(text["leader"]))
+                        applied += ApplyPlacement(new DimensionText(dimension), new JObject { ["leader"] = text["leader"] },
+                            "dimension", warnings);
                 }
                 else
                 {
@@ -93,7 +100,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     }
 
                     ITextTarget target = segmentCount > 1
-                        ? new SegmentText(dimension.Segments.get_Item(index.Value))
+                        ? new SegmentText(dimension, dimension.Segments.get_Item(index.Value))
                         : new DimensionText(dimension);
                     applied += ApplyFields(target, token, $"segment {index}", warnings);
                 }
@@ -136,13 +143,16 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     "Dimension measures 0: references coincide or are not spaced along the dimension direction.");
         }
 
-        private static int ApplyFields(ITextTarget target, JObject fields, string label, List<string> warnings)
+        private static bool IsSet(JToken token) => token != null && token.Type != JTokenType.Null;
+
+        private static int ApplyFields(ITextTarget target, JObject fields, string label, List<string> warnings,
+            bool includePlacement = true)
         {
             var applied = 0;
             foreach (var field in TextFields)
             {
                 var token = fields[field];
-                if (token == null || token.Type == JTokenType.Null)
+                if (!IsSet(token))
                     continue;
                 try
                 {
@@ -155,18 +165,76 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 }
             }
 
+            if (includePlacement)
+                applied += ApplyPlacement(target, fields, label, warnings);
+            return applied;
+        }
+
+        /// <summary>
+        ///     Applies 'position' ({x, y, z?} mm, projected onto the owner view's
+        ///     plane) and then 'leader', so an explicit leader setting wins over
+        ///     whatever Revit chooses when the text moves.
+        /// </summary>
+        private static int ApplyPlacement(ITextTarget target, JObject fields, string label, List<string> warnings)
+        {
+            var applied = 0;
+            if (IsSet(fields["position"]))
+            {
+                try
+                {
+                    var point = DocumentationUtils.ReadPointMm(fields["position"])
+                                ?? throw new ArgumentException("'position' must be a point {x, y, z?} in mm.");
+                    var view = target.Owner.Document.GetElement(target.Owner.OwnerViewId) as View;
+                    target.SetPosition(view != null ? DetailGeometry.Project(view, point) : point);
+                    applied++;
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add($"{label} position: {ex.Message}");
+                }
+            }
+
+            if (IsSet(fields["leader"]))
+            {
+                try
+                {
+                    target.SetLeader(fields.Value<bool>("leader"));
+                    applied++;
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add($"{label} leader: {ex.Message}");
+                }
+            }
+
             return applied;
         }
 
         private interface ITextTarget
         {
+            Dimension Owner { get; }
             void Set(string field, string value);
+            void SetPosition(XYZ point);
+            void SetLeader(bool hasLeader);
         }
 
         private sealed class DimensionText : ITextTarget
         {
             private readonly Dimension _dimension;
             public DimensionText(Dimension dimension) => _dimension = dimension;
+
+            public Dimension Owner => _dimension;
+
+            public void SetPosition(XYZ point) => _dimension.TextPosition = point;
+
+            public void SetLeader(bool hasLeader)
+            {
+#if REVIT2022_OR_GREATER
+                _dimension.HasLeader = hasLeader;
+#else
+                throw new NotSupportedException("Dimension.HasLeader requires Revit 2022 or later.");
+#endif
+            }
 
             public void Set(string field, string value)
             {
@@ -183,8 +251,22 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 
         private sealed class SegmentText : ITextTarget
         {
+            private readonly Dimension _dimension;
             private readonly DimensionSegment _segment;
-            public SegmentText(DimensionSegment segment) => _segment = segment;
+
+            public SegmentText(Dimension dimension, DimensionSegment segment)
+            {
+                _dimension = dimension;
+                _segment = segment;
+            }
+
+            public Dimension Owner => _dimension;
+
+            public void SetPosition(XYZ point) => _segment.TextPosition = point;
+
+            public void SetLeader(bool hasLeader) =>
+                throw new NotSupportedException(
+                    "the Revit API has no per-segment leader; put 'leader' in 'text' to set it for the whole dimension.");
 
             public void Set(string field, string value)
             {
