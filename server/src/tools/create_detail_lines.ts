@@ -25,9 +25,26 @@ const lineItemSchema = z.union([
       points: z.array(point3Schema).min(2).max(1000),
       closed: z.boolean().optional().default(false),
       lineStyle: lineStyle.optional(),
+      filletRadius: z
+        .number()
+        .finite()
+        .nonnegative()
+        .optional()
+        .describe("Round every corner with a tangent arc of this radius (mm); end points of open polylines stay sharp"),
+      filletRadii: z
+        .array(z.number().finite().nonnegative())
+        .max(1000)
+        .optional()
+        .describe("Per-vertex fillet radius (mm), one per point (0 = sharp); overrides filletRadius"),
     })
     .strict()
-    .describe("Polyline through the points"),
+    .refine((poly) => poly.filletRadii === undefined || poly.filletRadii.length === poly.points.length, {
+      message: "filletRadii needs one value per point",
+      path: ["filletRadii"],
+    })
+    .describe(
+      "Polyline through the points. filletRadius/filletRadii round the corners (e.g. stirrups/ties); a radius that does not fit the adjacent segments is reduced and reported in warnings"
+    ),
 ]);
 
 export function registerCreateDetailLinesTool(server: McpServer) {

@@ -94,6 +94,21 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["detail line", "detail curve", "arc", "line style", "drafting"],
   },
+  array_annotations: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["array", "repeat", "spacing", "o.c.", "on center", "pattern", "copy", "rebar dots", "nails", "screws", "drafting"],
+  },
+  list_detail_groups: {
+    catalogs: ["annotate"],
+    readOnly: true,
+    keywords: ["detail group", "group type", "typical", "symbol", "library", "drafting"],
+  },
+  modify_detail_groups: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["detail group", "place group", "create group", "ungroup", "typical", "symbol", "drafting"],
+  },
   create_filled_region: {
     catalogs: ["annotate"],
     readOnly: false,

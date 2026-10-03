@@ -50,6 +50,21 @@ const operationSchema = z.discriminatedUnion("action", [
     .strict()
     .describe("Change the type of text notes, dimensions, filled regions or detail components"),
   z.object({ action: z.literal("setParameters"), elementIds, parameters: parameterValuesSchema }).strict(),
+  z
+    .object({
+      action: z.literal("mirror"),
+      elementIds,
+      axis: z.object({ start: point3Schema, end: point3Schema }).strict().describe("Mirror axis in the view plane (mm)"),
+      copy: z.boolean().optional().default(false).describe("Keep the originals and mirror copies"),
+    })
+    .strict()
+    .describe("Mirror about an axis line in the view plane"),
+  z
+    .object({ action: z.literal("flip"), elementIds })
+    .strict()
+    .describe(
+      "Flip detail components in place: line-based items reverse their line direction (a break line then masks the other side), point-based items flip hand/facing or mirror about their own vertical axis"
+    ),
 ]);
 
 export function registerModifyAnnotationsTool(server: McpServer) {
