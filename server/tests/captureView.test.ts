@@ -45,6 +45,18 @@ describe("capture_view", () => {
     expect(result.content).toHaveLength(1);
   });
 
+  it("forwards restoreActiveView only when given", async () => {
+    sendCommand.mockResolvedValue({ Success: false, Message: "x" });
+    await setup().invoke({ viewId: 5, restoreActiveView: true });
+    expect(sendCommand).toHaveBeenCalledWith("capture_view", {
+      viewId: 5,
+      zoomToFit: true,
+      pixelSize: 1600,
+      restoreActiveView: true,
+    });
+    expect(() => setup().parse({ restoreActiveView: "yes" })).toThrow();
+  });
+
   it("validates input bounds", () => {
     const tool = setup();
     expect(() => tool.parse({ pixelSize: 8000 })).toThrow();
