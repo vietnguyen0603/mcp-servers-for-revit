@@ -170,6 +170,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_detail_lines` | annotate | Create detail lines and arcs with a line style |
 | `create_filled_region` | annotate | Create filled or masking regions from boundary loops |
 | `place_detail_component` | annotate | Place point- or line-based detail components |
+| `place_annotation_symbol` | annotate | Place generic annotation symbols (sub-detail titles, weld symbols) with parameters and leaders |
 | `create_revision_cloud` | annotate | Create revision clouds around rectangles or polygons |
 | `create_grid_dimensions` | annotate, structure | Create grid chain and overall dimensions in a view |
 | `create_spot_elevations` | annotate, structure | Create spot elevations and spot coordinates on elements |

@@ -279,6 +279,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "place_annotation_symbol",
+      "description": "Place generic annotation symbols with parameters and leaders in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_revision_cloud",
       "description": "Create revision clouds in a view",
       "assemblyPath": "RevitMCPCommandSet.dll"
