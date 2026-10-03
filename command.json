@@ -327,6 +327,36 @@
       "commandName": "create_rebar_annotation",
       "description": "Create multi-rebar annotations and rebar tags",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "audit_detail_references",
+      "description": "Audit manual detail-reference bubbles and live view references against placed viewports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "sync_detail_references",
+      "description": "Rewrite detail/sheet numbers of manual detail-reference bubbles",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_view_reference",
+      "description": "Place reference callouts or reference sections pointing to existing views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_view_contents",
+      "description": "Copy view-specific elements between views, optionally from another open document",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_drafting_views",
+      "description": "Copy drafting views and their contents from another open document",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "layout_detail_sheet",
+      "description": "Lay out views on a detail sheet in a module grid and number them",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

@@ -207,6 +207,38 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   set_view_range: { catalogs: ["views"], readOnly: false, keywords: ["view range", "cut plane", "view depth", "plan"] },
   align_viewports: { catalogs: ["views"], readOnly: false, keywords: ["viewport", "align", "sheet", "layout"] },
 
+  // detail library / sheet workflows
+  audit_detail_references: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["section cut", "bubble", "detail number", "sheet number", "view reference", "dead", "qa", "library"],
+  },
+  sync_detail_references: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["section cut", "bubble", "detail number", "sheet number", "renumber", "fix references", "library"],
+  },
+  create_view_reference: {
+    catalogs: ["annotate", "views"],
+    readOnly: false,
+    keywords: ["reference callout", "reference section", "view reference", "live reference", "drafting"],
+  },
+  copy_view_contents: {
+    catalogs: ["views", "annotate"],
+    readOnly: false,
+    keywords: ["copy", "paste", "transfer", "library", "drafting", "detail", "other document"],
+  },
+  copy_drafting_views: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["insert views from file", "import", "library", "typical detail", "drafting view", "transfer"],
+  },
+  layout_detail_sheet: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["sheet", "layout", "grid", "module", "detail number", "viewport", "typical detail", "pack"],
+  },
+
   // modify
   operate_element: {
     catalogs: ["modify"],
