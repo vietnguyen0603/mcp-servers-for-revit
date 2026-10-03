@@ -50,43 +50,36 @@ namespace revit_mcp_plugin.Core
             set => _port = value;
         }
 
-        // 初始化
         // Initialization.
         public void Initialize(UIApplication uiApp)
         {
             _uiApp = uiApp;
 
-            // 初始化事件管理器
             // Initialize ExternalEventManager
             ExternalEventManager.Instance.Initialize(uiApp, _logger);
 
-            // 记录当前 Revit 版本
             // Get the current Revit version.
             var versionAdapter = new RevitMCPSDK.API.Utils.RevitVersionAdapter(_uiApp.Application);
             string currentVersion = versionAdapter.GetRevitVersion();
-            _logger.Info("当前 Revit 版本: {0}\nCurrent Revit version: {0}", currentVersion);
+            _logger.Info("Current Revit version: {0}", currentVersion);
 
 
 
-            // 创建命令执行器
             // Create CommandExecutor
             _commandExecutor = new CommandExecutor(_commandRegistry, _logger);
 
-            // 加载配置并注册命令
             // Load configuration and register commands.
             ConfigurationManager configManager = new ConfigurationManager(_logger);
             configManager.LoadConfiguration();
             
 
-            //// 从配置中读取服务端口
             //// Read the service port from the configuration.
             //if (configManager.Config.Settings.Port > 0)
             //{
             //    _port = configManager.Config.Settings.Port;
             //}
-            _port = 8080; // 固定端口号 - Hard-wired port number.
+            _port = 8080; // Hard-wired port number.
 
-            // 加载命令
             // Load command.
             CommandManager commandManager = new CommandManager(
                 _commandRegistry, _logger, configManager, _uiApp);
@@ -176,7 +169,6 @@ namespace revit_mcp_plugin.Core
 
                 while (_isRunning && tcpClient.Connected)
                 {
-                    // 读取客户端消息
                     // Read client messages.
                     int bytesRead = 0;
 
@@ -186,14 +178,12 @@ namespace revit_mcp_plugin.Core
                     }
                     catch (IOException)
                     {
-                        // 客户端断开连接
                         // Client disconnected.
                         break;
                     }
 
                     if (bytesRead == 0)
                     {
-                        // 客户端断开连接
                         // Client disconnected.
                         break;
                     }
@@ -202,11 +192,10 @@ namespace revit_mcp_plugin.Core
                     // only process complete JSON messages.
                     foreach (string message in framer.Append(buffer, bytesRead))
                     {
-                        System.Diagnostics.Trace.WriteLine($"收到消息: {message}\nReceived message: {message}");
+                        System.Diagnostics.Trace.WriteLine($"Received message: {message}");
 
                         string response = ProcessJsonRPCRequest(message);
 
-                        // 发送响应
                         // Send response.
                         byte[] responseData = Encoding.UTF8.GetBytes(response);
                         stream.Write(responseData, 0, responseData.Length);
@@ -229,11 +218,9 @@ namespace revit_mcp_plugin.Core
 
             try
             {
-                // 解析JSON-RPC请求
                 // Parse JSON-RPC requests.
                 request = JsonConvert.DeserializeObject<JsonRPCRequest>(requestJson);
 
-                // 验证请求格式是否有效
                 // Verify that the request format is valid.
                 if (request == null || !request.IsValid())
                 {
@@ -244,7 +231,6 @@ namespace revit_mcp_plugin.Core
                     );
                 }
 
-                // 查找命令
                 // Search for the command in the registry.
                 if (!_commandRegistry.TryGetCommand(request.Method, out var command))
                 {
@@ -252,7 +238,6 @@ namespace revit_mcp_plugin.Core
                         $"Method '{request.Method}' not found");
                 }
 
-                // 执行命令
                 // Execute command.
                 try
                 {                
@@ -267,7 +252,6 @@ namespace revit_mcp_plugin.Core
             }
             catch (JsonException)
             {
-                // JSON解析错误
                 // JSON parsing error.
                 return CreateErrorResponse(
                     null,
@@ -277,7 +261,6 @@ namespace revit_mcp_plugin.Core
             }
             catch (Exception ex)
             {
-                // 处理请求时的其他错误
                 // Catch other errors produced when processing requests.
                 return CreateErrorResponse(
                     null,

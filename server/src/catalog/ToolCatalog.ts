@@ -80,7 +80,7 @@ export function errorResult(text: string): CallToolResult {
 
 function summarize(description: string | undefined): string {
   const text = (description ?? "").replace(/\s+/g, " ").trim();
-  const sentence = text.match(/^.*?[.。](\s|$)/)?.[0].trim() ?? text;
+  const sentence = text.match(/^.*?\.(\s|$)/)?.[0].trim() ?? text;
   return sentence.length > SUMMARY_MAX_LENGTH
     ? `${sentence.slice(0, SUMMARY_MAX_LENGTH - 1)}…`
     : sentence;
