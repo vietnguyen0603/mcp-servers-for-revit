@@ -26,6 +26,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   get_selected_elements: { catalogs: ["core"], readOnly: true, keywords: ["selection"] },
   get_available_family_types: { catalogs: ["core"], readOnly: true, keywords: ["family", "type", "symbol"] },
   ai_element_filter: { catalogs: ["core"], readOnly: true, keywords: ["find", "filter", "search", "elements"] },
+  capture_view: {
+    catalogs: ["core", "views"],
+    readOnly: true,
+    keywords: ["screenshot", "image", "zoom to fit", "refresh", "preview", "check result"],
+  },
 
   // architecture / structure modelling
   create_point_based_element: {
@@ -73,6 +78,17 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     keywords: ["tag", "label", "beam", "column", "door", "window", "untagged", "drafting"],
   },
   create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting"] },
+  get_view_annotations: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["read", "list", "detail line", "text", "dimension", "filled region", "drafting", "2d"],
+  },
+  modify_annotations: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["edit", "move", "copy", "rotate", "delete", "text", "line style", "drafting", "2d"],
+  },
   create_detail_lines: {
     catalogs: ["annotate"],
     readOnly: false,

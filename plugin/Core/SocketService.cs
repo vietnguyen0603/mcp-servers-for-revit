@@ -172,6 +172,7 @@ namespace revit_mcp_plugin.Core
             try
             {
                 byte[] buffer = new byte[8192];
+                var framer = new JsonMessageFramer();
 
                 while (_isRunning && tcpClient.Connected)
                 {
@@ -197,15 +198,19 @@ namespace revit_mcp_plugin.Core
                         break;
                     }
 
-                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    System.Diagnostics.Trace.WriteLine($"收到消息: {message}\nReceived message: {message}");
+                    // A request larger than the buffer arrives in several reads;
+                    // only process complete JSON messages.
+                    foreach (string message in framer.Append(buffer, bytesRead))
+                    {
+                        System.Diagnostics.Trace.WriteLine($"收到消息: {message}\nReceived message: {message}");
 
-                    string response = ProcessJsonRPCRequest(message);
+                        string response = ProcessJsonRPCRequest(message);
 
-                    // 发送响应
-                    // Send response.
-                    byte[] responseData = Encoding.UTF8.GetBytes(response);
-                    stream.Write(responseData, 0, responseData.Length);
+                        // 发送响应
+                        // Send response.
+                        byte[] responseData = Encoding.UTF8.GetBytes(response);
+                        stream.Write(responseData, 0, responseData.Length);
+                    }
                 }
             }
             catch(Exception)

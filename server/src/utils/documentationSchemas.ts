@@ -20,6 +20,8 @@ export const parameterValuesSchema = z
 
 interface RevitResult {
   success?: boolean;
+  /** Command-set handlers serialise AIResult with PascalCase names. */
+  Success?: boolean;
   message?: string;
 }
 
@@ -32,7 +34,8 @@ export async function sendDocumentationCommand(command: string, params: unknown)
     const response = await withRevitConnection(async (revitClient) => {
       return await revitClient.sendCommand(command, params);
     });
-    const failed = (response as RevitResult | null)?.success === false;
+    const result = response as RevitResult | null;
+    const failed = result?.success === false || result?.Success === false;
     return {
       content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
       ...(failed ? { isError: true } : {}),

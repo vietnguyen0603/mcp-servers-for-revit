@@ -209,6 +209,21 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "get_view_annotations",
+      "description": "Read 2D annotation and detail elements of a view in mm",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "modify_annotations",
+      "description": "Move, copy, rotate, delete or edit 2D annotation and detail elements",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "capture_view",
+      "description": "Zoom the active view to fit and capture it as a PNG",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "export_view_image",
       "description": "Export views to image files",
       "assemblyPath": "RevitMCPCommandSet.dll"
