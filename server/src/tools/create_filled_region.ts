@@ -19,7 +19,7 @@ export function registerCreateFilledRegionTool(server: McpServer) {
             filledRegionTypeId: elementIdSchema.optional(),
             filledRegionTypeName: z.string().min(1).max(256).optional(),
             masking: z.boolean().optional().describe("Create a masking region instead (Revit 2024+)"),
-            lineStyle: z.string().min(1).max(256).optional().describe("Boundary line style name"),
+            lineStyle: z.string().min(1).max(256).optional().describe('Boundary line style name (exact, case-insensitive); "Invisible" or "<Invisible lines>" hides the boundary'),
           })
         )
         .max(500)

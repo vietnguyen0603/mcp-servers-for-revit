@@ -28,7 +28,13 @@ export function registerCaptureViewTool(server: McpServer) {
         .max(4096)
         .optional()
         .default(1600)
-        .describe("Image width in pixels"),
+        .describe("Image width in pixels (256-4096)"),
+      restoreActiveView: z
+        .boolean()
+        .optional()
+        .describe(
+          "Switch back to the previously active view after capturing (and close the captured view's window if the capture opened it), so the captured view can be deleted afterwards. Default false"
+        ),
       folder: absoluteFolderSchema
         .optional()
         .describe("Folder for the PNG (default the system temp folder\\revit-mcp-captures)"),

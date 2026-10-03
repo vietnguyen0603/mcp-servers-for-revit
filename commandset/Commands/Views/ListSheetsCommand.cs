@@ -6,7 +6,7 @@ namespace RevitMCPCommandSet.Commands.Views
     public class ListSheetsCommand : JsonParameterCommandBase
     {
         public ListSheetsCommand(UIApplication uiApp)
-            : base(new ListSheetsEventHandler(), uiApp, 30000)
+            : base(new ListSheetsEventHandler(), uiApp, 90000)
         {
         }
 
