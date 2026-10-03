@@ -6,6 +6,7 @@ import {
   point3Schema,
   sendDocumentationCommand,
 } from "../utils/documentationSchemas.js";
+import { leaderAttachmentSchema, textNoteLeadersSchema } from "./create_text_note.js";
 
 const elementIds = z.array(elementIdSchema).min(1).max(1000).describe("Elements to change");
 
@@ -50,6 +51,27 @@ const operationSchema = z.discriminatedUnion("action", [
     .strict()
     .describe("Change the type of text notes, dimensions, filled regions or detail components"),
   z.object({ action: z.literal("setParameters"), elementIds, parameters: parameterValuesSchema }).strict(),
+  z
+    .object({
+      action: z.literal("addLeaders"),
+      elementIds,
+      leaders: textNoteLeadersSchema,
+      leaderLeftAttachment: leaderAttachmentSchema.optional(),
+      leaderRightAttachment: leaderAttachmentSchema.optional(),
+    })
+    .strict()
+    .describe("Text notes only: add leaders ({end, elbow?, side?, shape?} in mm, same as create_text_note)"),
+  z
+    .object({
+      action: z.literal("setLeaders"),
+      elementIds,
+      leaders: textNoteLeadersSchema,
+      leaderLeftAttachment: leaderAttachmentSchema.optional(),
+      leaderRightAttachment: leaderAttachmentSchema.optional(),
+    })
+    .strict()
+    .describe("Text notes only: replace all leaders with the given ones"),
+  z.object({ action: z.literal("removeLeaders"), elementIds }).strict().describe("Text notes only: remove all leaders"),
 ]);
 
 export function registerModifyAnnotationsTool(server: McpServer) {
