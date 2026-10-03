@@ -104,6 +104,20 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["detail component", "detail item", "repeating detail", "drafting"],
   },
+  place_annotation_symbol: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: [
+      "generic annotation",
+      "symbol",
+      "subtitle",
+      "sub-detail title",
+      "weld symbol",
+      "elevation marker",
+      "leader",
+      "drafting",
+    ],
+  },
   create_revision_cloud: { catalogs: ["annotate"], readOnly: false, keywords: ["revision", "cloud", "markup"] },
   create_grid_dimensions: {
     catalogs: ["annotate", "structure"],
