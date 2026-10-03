@@ -8,6 +8,8 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
     /// <summary>
     ///     Creates text notes. Locations are model millimetres for model views
     ///     and sheet millimetres for sheets; width is paper-space millimetres.
+    ///     Optional leaders (end/elbow points in the same millimetre coordinates)
+    ///     and whole-note formatting are applied after creation.
     /// </summary>
     public class CreateTextNoteEventHandler : JsonParameterEventHandler
     {
@@ -47,7 +49,16 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     ? TextNote.Create(doc, view.Id, location, DocumentationUtils.MmToFeet(w), text, options)
                     : TextNote.Create(doc, view.Id, location, text, options);
 
-                return new { textNoteId = note.Id.GetValue(), viewId = view.Id.GetValue() };
+                TextNoteStyling.ApplyFormat(note, item["format"]);
+                TextNoteStyling.ApplyAttachments(note, item);
+                TextNoteStyling.AddLeaders(doc, note, view, item["leaders"]);
+
+                return new
+                {
+                    textNoteId = note.Id.GetValue(),
+                    viewId = view.Id.GetValue(),
+                    leaderCount = note.LeaderCount
+                };
             });
 
             return Ok($"Created {results.Count(r => r.Value<bool>("success"))} of {results.Count} text notes.",

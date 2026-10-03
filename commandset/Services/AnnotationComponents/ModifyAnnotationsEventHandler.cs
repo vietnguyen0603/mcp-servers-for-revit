@@ -120,6 +120,32 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     return new { action, elementIds = ids.Select(i => i.GetValue()) };
                 }
 
+                case "addLeaders":
+                case "setLeaders":
+                case "removeLeaders":
+                {
+                    // Text note leaders (see TextNoteStyling); other element types are rejected.
+                    var notes = elements.Select(e => TextNoteStyling.RequireTextNote(e, action)).ToList();
+                    if (action != "removeLeaders" && !(op["leaders"] is JArray leaders && leaders.Count > 0))
+                        throw new ArgumentException($"{action} needs a non-empty 'leaders' array.");
+                    foreach (var note in notes)
+                    {
+                        if (action != "addLeaders")
+                            note.RemoveLeaders();
+                        if (action == "removeLeaders")
+                            continue;
+                        TextNoteStyling.ApplyAttachments(note, op);
+                        TextNoteStyling.AddLeaders(doc, note, OwnerView(doc, note), op["leaders"]);
+                    }
+
+                    return new
+                    {
+                        action,
+                        elementIds = ids.Select(i => i.GetValue()),
+                        leaderCounts = notes.Select(n => n.LeaderCount)
+                    };
+                }
+
                 default:
                     throw new ArgumentException(
                         $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setType or setParameters.");

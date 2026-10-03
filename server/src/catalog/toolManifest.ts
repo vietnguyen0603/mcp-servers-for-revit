@@ -77,7 +77,7 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["tag", "label", "beam", "column", "door", "window", "untagged", "drafting"],
   },
-  create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting"] },
+  create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting", "leader"] },
   get_view_annotations: {
     catalogs: ["annotate", "views"],
     readOnly: true,
