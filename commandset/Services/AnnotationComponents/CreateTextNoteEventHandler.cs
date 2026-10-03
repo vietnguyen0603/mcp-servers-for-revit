@@ -9,7 +9,8 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
     ///     Creates text notes. Locations are model millimetres for model views
     ///     and sheet millimetres for sheets; width is paper-space millimetres.
     ///     Optional leaders (end/elbow points in the same millimetre coordinates)
-    ///     and whole-note formatting are applied after creation.
+    ///     and whole-note formatting are applied after creation. The type is
+    ///     textNoteTypeId, else textNoteTypeName (exact, then unique partial match).
     /// </summary>
     public class CreateTextNoteEventHandler : JsonParameterEventHandler
     {
@@ -19,6 +20,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
         {
             var doc = uiDoc.Document;
             var items = DocumentationUtils.RequireArray(parameters, "notes");
+            List<TextNoteType> textNoteTypes = null;
             var results = DocumentationUtils.RunBatch(doc, "MCP: Create Text Notes", items, item =>
             {
                 var text = item.Value<string>("text");
@@ -32,10 +34,14 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 if (view.IsTemplate)
                     throw new ArgumentException("Text notes cannot be placed in a view template.");
 
+                var typeName = item.Value<string>("textNoteTypeName");
                 var typeId = DocumentationUtils.ReadId(item, "textNoteTypeId") is long requested
                     ? DocumentationUtils.GetElement<TextNoteType>(doc, requested)?.Id
                       ?? throw new ArgumentException($"textNoteTypeId {requested} is not a text note type.")
-                    : doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
+                    : !string.IsNullOrWhiteSpace(typeName)
+                        ? TypeNameResolver.Resolve(textNoteTypes ?? (textNoteTypes = new FilteredElementCollector(doc)
+                            .OfClass(typeof(TextNoteType)).Cast<TextNoteType>().ToList()), typeName, "Text note type").Id
+                        : doc.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
 
                 var options = new TextNoteOptions(typeId)
                 {
@@ -57,6 +63,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 {
                     textNoteId = note.Id.GetValue(),
                     viewId = view.Id.GetValue(),
+                    textNoteTypeId = note.GetTypeId().GetValue(),
                     leaderCount = note.LeaderCount
                 };
             });

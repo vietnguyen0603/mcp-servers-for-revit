@@ -50,7 +50,7 @@ export function registerCreateTextNoteTool(server: McpServer) {
     "create_text_note",
     "Create text notes, optionally with leaders and formatting, in a view or on a sheet. Location is the top-left of the text box (for Left alignment) in model millimetres for model views and in sheet millimetres for sheets and drafting views. Width is the paper width in millimetres; omit it for a single unwrapped line. Separate paragraphs (list items) with line breaks. " +
       "Leaders: each leader goes from the text's Left or Right side (default: the side facing 'end') to 'end' (the arrowhead on the geometry, mm, same coordinates as location). For the typical-detail style (horizontal shoulder then angled leader) omit 'elbow' and a short horizontal shoulder level with the first text line is created; or give 'elbow' explicitly. Arc leaders ignore elbow. " +
-      "leaderLeftAttachment/leaderRightAttachment pick the text line the leader attaches to. format applies bold/italic/underline/allCaps/list to the whole note; headingLines bolds+underlines the first N paragraphs and the list then numbers only the rest (NOTES blocks). Returns textNoteId and leaderCount per note.",
+      "leaderLeftAttachment/leaderRightAttachment pick the text line the leader attaches to. format applies bold/italic/underline/allCaps/list to the whole note; headingLines bolds+underlines the first N paragraphs and the list then numbers only the rest (NOTES blocks). Pick the text type by textNoteTypeId or textNoteTypeName (list them with list_drafting_types). Returns textNoteId and leaderCount per note.",
     {
       notes: z
         .array(
@@ -58,7 +58,15 @@ export function registerCreateTextNoteTool(server: McpServer) {
             text: z.string().min(1).max(4096),
             location: point3Schema.describe("Insertion point (mm)"),
             viewId: elementIdSchema.optional().describe("View or sheet to place the note in (default active view)"),
-            textNoteTypeId: elementIdSchema.optional().describe("Text type (default project text type)"),
+            textNoteTypeId: elementIdSchema.optional().describe("Text type id (default project text type); wins over textNoteTypeName"),
+            textNoteTypeName: z
+              .string()
+              .min(1)
+              .max(256)
+              .optional()
+              .describe(
+                "Text type name, e.g. '1/8\" Arial -Arrow': exact case-insensitive match first, then a unique partial match (see list_drafting_types)"
+              ),
             width: z.number().positive().max(2000).optional().describe("Wrap width on paper (mm)"),
             rotationDegrees: z.number().finite().optional(),
             horizontalAlignment: z.enum(["Left", "Center", "Right"]).optional(),

@@ -181,6 +181,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["rebar", "multi-rebar", "reinforcement", "tag", "dimension"],
   },
+  list_drafting_types: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["text type", "dimension type", "filled region type", "line style", "viewport type", "title block", "standards", "drafting"],
+  },
 
   // views / sheets
   list_views: {
@@ -197,6 +202,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   duplicate_view: { catalogs: ["views"], readOnly: false, keywords: ["copy", "dependent", "detailing"] },
   create_sheet: { catalogs: ["views"], readOnly: false, keywords: ["sheet", "titleblock", "title block", "revision"] },
   place_viewport: { catalogs: ["views"], readOnly: false, keywords: ["viewport", "sheet", "place view", "layout"] },
+  update_viewports: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["viewport", "detail number", "renumber", "anchor", "align", "viewport type", "title", "label", "sheet"],
+  },
   create_schedule: {
     catalogs: ["views", "analyze"],
     readOnly: false,

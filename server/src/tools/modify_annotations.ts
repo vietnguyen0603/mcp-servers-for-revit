@@ -81,7 +81,9 @@ const operationSchema = z.discriminatedUnion("action", [
       segments: dimensionSegmentsTextSchema.optional(),
     })
     .strict()
-    .describe("Set dimension value override/prefix/suffix/above/below ('text' = all segments, 'segments' = by index)"),
+    .describe(
+      "Set dimension value override/prefix/suffix/above/below, text position (mm) and leader ('text' = all segments, 'segments' = by index)"
+    ),
   z
     .object({
       action: z.literal("mirror"),
@@ -102,7 +104,7 @@ const operationSchema = z.discriminatedUnion("action", [
 export function registerModifyAnnotationsTool(server: McpServer) {
   server.tool(
     "modify_annotations",
-    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below), addLeaders/setLeaders/removeLeaders (text notes), mirror (about an axis, optionally as copies) and flip (detail components; flipping a break line swaps its masked side). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
+    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below, text position and leader), addLeaders/setLeaders/removeLeaders (text notes), mirror (about an axis, optionally as copies) and flip (detail components; flipping a break line swaps its masked side). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
     {
       operations: z
         .array(operationSchema)
