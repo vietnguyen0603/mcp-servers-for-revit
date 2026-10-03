@@ -22,61 +22,20 @@
 //
 
 using Autodesk.Revit.UI;
-using Newtonsoft.Json.Linq;
-using RevitMCPSDK.API.Base;
-using RevitMCPCommandSet.Models.Annotation;
 using RevitMCPCommandSet.Services.AnnotationComponents;
 
 namespace RevitMCPCommandSet.Commands.AnnotationComponents;
 
 /// <summary>
-///     Command to create dimensions
+///     Command to create dimensions; parsing and validation run in
+///     <see cref="CreateDimensionEventHandler" /> on the Revit thread.
 /// </summary>
-public class CreateDimensionCommand : ExternalEventCommandBase
+public class CreateDimensionCommand : JsonParameterCommandBase
 {
-    /// <summary>
-    ///     Constructor
-    /// </summary>
-    /// <param name="uiApp">Revit UIApplication</param>
     public CreateDimensionCommand(UIApplication uiApp)
-        : base(new CreateDimensionEventHandler(), uiApp)
+        : base(new CreateDimensionEventHandler(), uiApp, 60000)
     {
     }
 
-    private CreateDimensionEventHandler _handler => (CreateDimensionEventHandler)Handler;
-
-    /// <summary>
-    ///     Command name
-    /// </summary>
     public override string CommandName => "create_dimensions";
-
-    /// <summary>
-    ///     Execute dimension creation command
-    /// </summary>
-    /// <param name="parameters">JSON parameters</param>
-    /// <param name="requestId">Request ID</param>
-    /// <returns>Execution result</returns>
-    public override object Execute(JObject parameters, string requestId)
-    {
-        try
-        {
-            // Parse parameters
-            var dimensions = parameters["dimensions"]?.ToObject<List<DimensionCreationInfo>>();
-
-            if (dimensions == null || dimensions.Count == 0)
-                throw new ArgumentException("Dimension list cannot be empty");
-
-            // Set parameters and execute
-            _handler.SetParameters(dimensions);
-
-            // Raise event and wait for completion
-            if (RaiseAndWaitForCompletion(20000)) // 20 seconds timeout
-                return _handler.Result;
-            throw new TimeoutException("Dimension creation operation timed out");
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Error creating dimensions: {ex.Message}", ex);
-        }
-    }
 }
