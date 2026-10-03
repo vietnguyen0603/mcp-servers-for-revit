@@ -137,6 +137,176 @@
       "commandName": "get_beam_register_data",
       "description": "Return register-ready beam data: one record per physical beam instance with mark/type, section size, level, axis/from/to grids, model and clear lengths, start/end coordinates and supports in millimetres (mm). Clear span is face-to-face and is null when support faces cannot be established.",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_views",
+      "description": "List views, view templates and view family types with the sheets each view is placed on",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_sheets",
+      "description": "List sheets with title blocks, viewports and schedules, plus available title block types",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_view",
+      "description": "Create floor, ceiling and structural plans, sections, elevations, 3D and drafting views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "duplicate_view",
+      "description": "Duplicate views as copies, copies with detailing, or dependent views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_sheet",
+      "description": "Create sheets with title block, number, name, parameters and revisions",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "place_viewport",
+      "description": "Place views and schedules on sheets",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_schedule",
+      "description": "Create schedules with fields, filters and sorting/grouping",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_schedule_data",
+      "description": "Read schedule cell text, or list schedules",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_text_note",
+      "description": "Create text notes in a view or on a sheet",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "tag_elements",
+      "description": "Tag elements of any category in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "apply_view_template",
+      "description": "Apply or remove view templates on views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_view_filter",
+      "description": "Create parameter filters and add them to views with graphic overrides",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "override_graphics",
+      "description": "Override graphics of elements or categories in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "export_sheets",
+      "description": "Export sheets or views to PDF or DWG",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_view_annotations",
+      "description": "Read 2D annotation and detail elements of a view in mm",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "modify_annotations",
+      "description": "Move, copy, rotate, delete or edit 2D annotation and detail elements",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "capture_view",
+      "description": "Zoom the active view to fit and capture it as a PNG",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "export_view_image",
+      "description": "Export views to image files",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_revisions",
+      "description": "List revisions and the sheets they appear on",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_revision",
+      "description": "Create revisions",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "update_sheets",
+      "description": "Rename, renumber and set parameters or revisions on existing sheets",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_callout",
+      "description": "Create callout views in a parent view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_crop_region",
+      "description": "Set or fit the crop region of views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_view_range",
+      "description": "Set the view range of plan views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "align_viewports",
+      "description": "Align viewports across sheets",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_detail_lines",
+      "description": "Create detail lines and arcs in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_filled_region",
+      "description": "Create filled or masking regions in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "place_detail_component",
+      "description": "Place detail component families in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_revision_cloud",
+      "description": "Create revision clouds in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_grid_dimensions",
+      "description": "Create grid chain and overall dimensions in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_spot_elevations",
+      "description": "Create spot elevations and spot coordinates on elements",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "find_tag_overlaps",
+      "description": "Report overlapping tags and annotations in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "delete_orphaned_tags",
+      "description": "Delete tags that no longer reference an element",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_rebar_annotation",
+      "description": "Create multi-rebar annotations and rebar tags",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

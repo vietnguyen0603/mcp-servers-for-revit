@@ -16,14 +16,14 @@ export async function registerTools(
   const catalog = new ToolCatalog(server);
   const capturingServer = catalog.capturingServer();
 
-  // 获取当前文件的目录路径
+  // Get the directory of the current file
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  // 读取tools目录下的所有文件
+  // Read all files in the tools directory
   const files = fs.readdirSync(__dirname);
 
-  // 过滤出.ts或.js文件，但排除index文件和register文件
+  // Keep .ts or .js files, excluding the index and register files
   const toolFiles = files.filter(
     (file) =>
       (file.endsWith(".ts") || file.endsWith(".js")) &&
@@ -33,32 +33,32 @@ export async function registerTools(
       file !== "register.js"
   );
 
-  // 动态导入并注册每个工具
+  // Dynamically import and register each tool
   for (const file of toolFiles) {
     try {
-      // 构建导入路径
+      // Build the import path
       const importPath = `./${file.replace(/\.(ts|js)$/, ".js")}`;
 
-      // 动态导入模块
+      // Dynamically import the module
       const module = await import(importPath);
 
-      // 查找并执行注册函数
+      // Find and call the register function
       const registerFunctionName = Object.keys(module).find(
         (key) => key.startsWith("register") && typeof module[key] === "function"
       );
 
       if (registerFunctionName) {
         module[registerFunctionName](capturingServer);
-        console.error(`已注册工具: ${file}`);
+        console.error(`Registered tool: ${file}`);
       } else {
-        console.warn(`警告: 在文件 ${file} 中未找到注册函数`);
+        console.warn(`Warning: no register function found in file ${file}`);
       }
     } catch (error) {
-      console.error(`注册工具 ${file} 时出错:`, error);
+      console.error(`Error registering tool ${file}:`, error);
     }
   }
 
-  // 按目录（catalog）决定暴露哪些工具，并在 dynamic 模式下注册目录元工具
+  // Decide which tools to expose per catalog, and register the catalog meta-tools in dynamic mode
   catalog.finalize(options);
   if (options.mode === "dynamic") {
     registerCatalogTools(server, catalog);

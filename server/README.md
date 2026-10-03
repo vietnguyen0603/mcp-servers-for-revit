@@ -46,7 +46,8 @@ To keep the MCP client's context window small, the server exposes tools in two l
 | ------- | ------- | -------- |
 | `architecture` | `arch` | Walls, doors, windows, floors, roofs, rooms, levels, grids |
 | `structure` | `struct`, `register` | Framing systems, register extraction (grid, column/wall, beam), shared modelling tools |
-| `annotate` | `drafting` | Dimensions, wall and room tags |
+| `annotate` | `drafting` | Dimensions, tags, text, detail lines, regions, components, clouds, spot elevations, rebar annotation |
+| `views` | `sheets`, `schedule` | Views, sheets, viewports, schedules, templates, filters, overrides, revisions, export |
 | `modify` | `edit` | Select, hide, recolor, transparency, delete |
 | `analyze` | `analysis` | Model statistics, material quantities, room data export |
 | `data` | `database` | Local SQLite project and room storage |
@@ -87,6 +88,37 @@ Configure the behaviour with environment variables on the MCP server:
 | `color_elements` | modify | Color elements based on a parameter value |
 | `tag_all_walls` | annotate | Tag all walls in the current view |
 | `tag_all_rooms` | annotate | Tag all rooms in the current view |
+| `tag_elements` | annotate | Tag elements of any category in a view (by id or category, skipping already-tagged) |
+| `create_text_note` | annotate | Create text notes in a view or on a sheet |
+| `create_detail_lines` | annotate | Create detail lines and arcs with a line style |
+| `create_filled_region` | annotate | Create filled or masking regions from boundary loops |
+| `place_detail_component` | annotate | Place point- or line-based detail components |
+| `create_revision_cloud` | annotate | Create revision clouds around rectangles or polygons |
+| `create_grid_dimensions` | annotate, structure | Create grid chain and overall dimensions in a view |
+| `create_spot_elevations` | annotate, structure | Create spot elevations and spot coordinates on elements |
+| `find_tag_overlaps` | annotate | Report overlapping tags and annotations in a view |
+| `delete_orphaned_tags` | annotate | Delete tags that no longer reference an element |
+| `create_rebar_annotation` | annotate, structure | Create multi-rebar annotations and rebar tags |
+| `list_views` | views | List views, templates and view family types with their sheet placements |
+| `list_sheets` | views | List sheets with title blocks, viewports and schedules, plus title block types |
+| `create_view` | views | Create plans, sections, elevations, 3D and drafting views |
+| `duplicate_view` | views | Duplicate views (copy, with detailing, or dependent) |
+| `create_sheet` | views | Create sheets with title block, number, name, parameters and revisions |
+| `place_viewport` | views | Place views and schedules on sheets |
+| `create_schedule` | views, analyze | Create schedules with fields, filters and sorting/grouping |
+| `get_schedule_data` | views, analyze | Read schedule rows, or list schedules |
+| `apply_view_template` | views | Apply or remove view templates on views |
+| `create_view_filter` | views | Create parameter filters and add them to views with overrides |
+| `override_graphics` | views, modify | Override graphics of elements or categories in a view |
+| `export_sheets` | views | Export sheets or views to PDF or DWG |
+| `export_view_image` | views | Export views to image files |
+| `list_revisions` | views | List revisions and the sheets they appear on |
+| `create_revision` | views | Create revisions |
+| `update_sheets` | views | Rename, renumber and set parameters or revisions on sheets |
+| `create_callout` | views | Create callout views |
+| `set_crop_region` | views | Set or fit the crop region of views |
+| `set_view_range` | views | Set the view range of plan views |
+| `align_viewports` | views | Align viewports across sheets |
 | `export_room_data` | analyze, architecture | Export all room data from the project |
 | `get_grid_register_data` | structure | Return register-ready grid data (one record per grid, axis family and coordinate in mm) |
 | `get_column_wall_register_data` | structure | Return register-ready column and wall data (one record per physical column or wall leg in mm) |
