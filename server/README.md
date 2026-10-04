@@ -83,6 +83,8 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_room` | architecture | Create and place rooms at specified locations |
 | `create_dimensions` | annotate | Create dimension annotations in the current view |
 | `create_structural_framing_system` | structure | Create a structural beam framing system |
+| `create_structural_columns` | structure | Place structural columns between levels in bulk (inline or CSV/JSON data file) |
+| `create_beams` | structure | Place structural beams on levels in bulk with offsets, justification and join control |
 | `delete_element` | modify | Delete elements by ID |
 | `operate_element` | modify | Operate on elements (select, setColor, hide, etc.) |
 | `color_elements` | modify | Color elements based on a parameter value |

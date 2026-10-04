@@ -66,6 +66,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["beam system", "joist", "framing"],
   },
+  create_structural_columns: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["column", "steel column", "place columns", "bulk", "csv", "storey", "level to level"],
+  },
+  create_beams: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["beam", "girder", "joist", "framing", "steel beam", "bulk", "csv", "justification"],
+  },
   get_grid_register_data: { catalogs: ["structure"], readOnly: true, keywords: ["register", "schedule", "axis"] },
   get_column_wall_register_data: {
     catalogs: ["structure"],
