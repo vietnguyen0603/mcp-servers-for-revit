@@ -83,6 +83,67 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: true,
     keywords: ["pdf", "drawing", "vector", "calibrate", "scale", "grid bubble", "columns", "walls", "beams", "slab outline", "openings", "piles", "barrette", "takeoff", "coordinates", "model from pdf"],
   },
+  manage_view_templates: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["view template", "template", "visibility graphics", "v/g", "drawing style", "category overrides", "hidden lines", "controlled parameters", "detail level", "discipline"],
+  },
+  manage_annotation_types: {
+    catalogs: ["annotate", "views"],
+    readOnly: false,
+    keywords: ["text type", "dimension type", "spot elevation type", "grid type", "level type", "viewport type", "arrowhead", "tick mark", "text size", "font", "units", "drawing style", "standards", "default type"],
+  },
+  set_grid_display: {
+    catalogs: ["views", "annotate"],
+    readOnly: false,
+    keywords: ["grid bubble", "bubble end", "grid head", "2d extents", "crop", "datum", "propagate extents", "grid visibility"],
+  },
+  copy_project_standards: {
+    catalogs: ["views", "annotate"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["transfer project standards", "office standards", "template", "view template", "filter", "text type", "dimension type", "line style", "line pattern", "fill pattern", "object styles", "arrowhead", "tag family", "title block", "drawing style"],
+  },
+  export_project_style: {
+    catalogs: ["views", "annotate"],
+    readOnly: true,
+    keywords: ["drawing style", "office standards", "style profile", "json", "view template", "filter", "text type", "dimension type", "line style", "object styles", "harvest", "capture"],
+  },
+  create_project_parameter: {
+    catalogs: ["modify", "structure"],
+    readOnly: false,
+    keywords: ["shared parameter", "project parameter", "binding", "bind", "category", "instance", "type", "tag text", "label", "list parameters"],
+  },
+  set_parameters: {
+    catalogs: ["modify", "structure"],
+    readOnly: false,
+    keywords: ["parameter", "bulk", "mark", "comments", "expression", "template", "compose", "tag text", "label", "type parameter", "csv"],
+  },
+  probe_tag_types: {
+    catalogs: ["annotate"],
+    readOnly: true,
+    keywords: ["tag", "tag family", "label", "which parameter", "tag text", "mark", "type mark", "tag type"],
+  },
+  manage_graphics_standards: {
+    catalogs: ["annotate", "views"],
+    readOnly: false,
+    keywords: ["line pattern", "line style", "fill pattern", "hatch", "object styles", "line weight", "pen", "standards", "template", "dashed", "hidden"],
+  },
+  dimension_elements: {
+    catalogs: ["annotate", "structure"],
+    readOnly: false,
+    keywords: ["dimension", "column dimension", "wall thickness", "shear wall", "core wall", "grid offset", "column layout", "setting out"],
+  },
+  snap_to_grid: {
+    catalogs: ["structure", "modify"],
+    readOnly: false,
+    keywords: ["snap", "round", "align", "grid offset", "position error", "setting out", "clean model", "tolerance", "extracted model", "column position"],
+  },
+  style_tag_families: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["tag family", "label", "font", "text size", "width factor", "grid head", "level head", "view title", "match text style", "line weight", "reload family"],
+  },
   create_family: {
     catalogs: ["structure", "architecture"],
     readOnly: false,

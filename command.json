@@ -419,6 +419,66 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "manage_view_templates",
+      "description": "List, create, modify and apply view templates (scale, detail level, discipline, hidden lines, view range, category/filter overrides, controlled parameters)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "manage_annotation_types",
+      "description": "List, create, update or set default text, dimension, spot elevation, grid, level, viewport and arrowhead types",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_grid_display",
+      "description": "Set grid bubble ends (resolved per view side), 2D extents clipped to the crop region and propagate extents to parallel views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_project_standards",
+      "description": "Copy view templates, filters, annotation types, line styles, patterns, object styles and annotation families from another project or template",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "export_project_style",
+      "description": "Export a project's drawing standards to a JSON style profile",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_project_parameter",
+      "description": "Create shared project parameters bound to categories (instance/type), or list project parameters",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_parameters",
+      "description": "Bulk-set a parameter by filter or explicit items, with value or {Param} expression templates",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "probe_tag_types",
+      "description": "Report which parameters each loaded tag type displays (temporary tags, rolled back)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "manage_graphics_standards",
+      "description": "Create or update line patterns, line styles, fill patterns and object styles, or list them",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "dimension_elements",
+      "description": "Dimension columns/footings to grids per axis and wall thickness/length in a plan view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "snap_to_grid",
+      "description": "Round element offsets from grids (or global X/Y) to a step, moving columns, footings, piles, walls and beams by small shifts; dry run by default",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "style_tag_families",
+      "description": "Edit tag and annotation families so their label/text types (font, size, width, bold, colour, line weight) match the project text style, then reload them",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_family",
       "description": "Build a parametric extruded family (rectangular/circular, e.g. barrette or bored pile) from a template, load it and create types",
       "assemblyPath": "RevitMCPCommandSet.dll"

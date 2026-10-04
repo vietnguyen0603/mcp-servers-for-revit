@@ -214,3 +214,68 @@ Known minor issues:
 - **Openings:** cannot take a Mark.
 - **Summary ids:** ranges do not compress ids that step by 2.
 - **check_model:** reported 18 duplicate-like wall overlaps and 213 beam ends short of supports. These are errors in the extraction data, now easy to find.
+
+## Drawing production test — sheets like the PDF (2026-10-04)
+
+The test produced three A1 sheets at 1:150 in `Nexus_T3_MCP.rvt`: S-BB-100100 PILE CAP LAYOUT, S-T3-100201 COLUMN & SHEAR WALLS LAYOUT L1–L2, and S-T3-100104 FLOOR FRAMING PLAN L5–18 with a beam schedule. It used create_view, set_view_range, set_crop_region, override_graphics, create_view_filter, create_grid_dimensions, tag_elements, create_schedule, create_sheet, place_viewport and create_text_note. Everything below either needed `send_code_to_revit` or is still missing.
+
+| # | Gap | What happened | Proposed tool / fix |
+|---|---|---|---|
+| D1 | **Grid vertical extents (bug)** | `create_grids` leaves Revit's default ±4572 mm, so grids were invisible on 40 of 43 levels | create_grids: span all levels by default (`verticalExtent: allLevels`) — fix now |
+| D2 | **Grid display per view** | Bubble ends and 2D extents need per-view settings; End0/End1 is not predictable, and bubbles collided (B2/B, D2/E1) | `set_grid_display {viewIds, bubbles: top/bottom/left/right/both/none per grid or group, clipToCrop, offset2D}` |
+| D3 | **Template view filters hid the model** | The template's "Walls/Floors - Concrete NOT" filters hid every MCP-made wall and slab (types named `RC Wall`/`Slab`) | `set_view_filters {viewIds, filter, visible/remove}`; also name generated types with the material ("Concrete") or set the Structural Material |
+| D4 | **Structural plan graphics** | Beams were drawn solid where the PDF draws them dashed under the slab; no cut fill or slab edges by default | `apply_drawing_style {kind: framingPlan|columnPlan|foundationPlan}` or build view templates via a `create_view_template` tool (hidden framing, cut fill, halftone below) |
+| D5 | **Tag content** | Default tags show the type name (`B-2000x450`). The PDF uses Mark + size (`L5-18.HB6-2000x450`), column marks (`C4`), cap marks (`T3-F2`) and pile marks (`SGBR-01.1`) | `create_tag_family {category, label: [Mark, '-', b, 'x', h]}` from tag templates, or choose a tag type by label fields |
+| D6 | **Tag placement** | Tags overlap in the core and over cap+pile stacks; there is no aligned or along-beam offset | tag_elements: `avoidOverlaps`, `alongElement`, per-category offsets; auto-arrange after `find_tag_overlaps` |
+| D7 | **Wall marks** | The PDF has CW1–CW4 per core wall group; MCP walls have no marks and are pieces | `set_parameters` in bulk (mark by group), plus wall tags |
+| D8 | **Element dimensions** | The PDF dimensions column and cap sizes and their offsets to grids (550/550, 2300/3600); create_dimensions works only on picked references | `dimension_elements {elementIds, toGrids: true, sizes: true, side}` (faces of columns, caps, walls to the nearest grids) |
+| D9 | **Grid dimension grouping** | Grids 6/7 were chained with 2–5 and inclined grids were dimensioned at the "Start" end; explicit gridIds plus sides worked | create_grid_dimensions: group by side/extent automatically, follow bubble side |
+| D10 | **Dimension and text sizes** | Dimension text was unreadable at 1:150 with the template types | `create_dimension_type / set_annotation_style {textSize, font, tick}`, or copy from the office template (copy_families systemTypes) |
+| D11 | **Schedule filter on level** | A filter by `Reference Level = LEVEL 5` failed because the value is an ElementId; fixed with C# | create_schedule: resolve level/element-id filter values by name |
+| D12 | **Thickness hatches / legend** | The PDF hatches caps and slabs by thickness with a legend; filters plus fill patterns are possible, but there is no legend view tool | `create_legend` (legend components + text) and filter-by-type helpers |
+| D13 | **Title block** | Generic Autodesk A1; long sheet names overflow the title box | copy the office title block (copy_families) and `set_titleblock_params`; sheet name wrap rules |
+| D14 | **Sections / callouts on plans** | The PDF has sections 1-1/2-2 on the column sheet; create_view can make sections but there is no "section from plan with tags on sheet" workflow | Combine create_view (section) + place_viewport (works) — needs a recipe/skill rather than a tool |
+| D15 | **Slab thickness tags / spot elevations** | The PDF has PT-250 / S-300 labels and +138.250 spots; create_spot_elevations exists but there is no floor tag type with thickness | Floor tag family with thickness (D5) + spot elevations |
+| D16 | **copy_to_levels report** | `extraCopies` is noisy when beams were trimmed by joins (the copies are correct) | Match copies by element id order or by bounding-box centre |
+
+### Live retest of the drawing-style tools (2026-10-04, after deploy)
+
+The retest was done with tools only, except where noted.
+
+- **Worked:**
+  - `open_document` from the start page.
+  - `manage_graphics_standards`: the S-HIDDEN pattern and style.
+  - `manage_annotation_types`: the S-DIM and S-TEXT types, set as defaults.
+  - `manage_view_templates`: framing, column and foundation templates.
+  - `set_grid_display`: bubbles by side.
+  - `probe_tag_types`, `create_project_parameter`.
+  - `dimension_elements`: the column plan got 73 dimensions (28 for columns, 25 wall thicknesses, 20 wall lengths), and its `replaceExisting` cleanly replaced the 72 prototype dimensions.
+- **Lesson (user):** dashed beams under the slab need a structural plan plus beams joined to the slab. The template inherited **Floors transparency 100** from the project's structural plan defaults, which made the slab invisible. Fixed with `modify categories [{Floors, reset, transparency 0}]`, then hiding the surface fill. Plan templates always report ViewType FloorPlan; that is Revit behaviour.
+- **Model QA through dimensions:** the dimensions exposed ±5 mm extraction errors (C2 read `5 | 1095`). 307 orthogonal columns were snapped to 50 mm (with C#; it timed out on the MCP side but completed). Needed: an `align_to_grid` / snap tool.
+- **Fixes still to make:**
+
+| # | Fix |
+|---|---|
+| F1 | `dimension_elements`: `typeNameContains`/`familyNameContains` filter (caps without piles); `replaceExisting` should clear all dimensions of the selected categories, not just those of the selected ids |
+| F2 | `dimension_elements`: merge collinear/joined wall pieces into runs so core walls get outline dimensions; end faces of joined walls are missing |
+| F3 | Retype existing dimensions (`modify_annotations` or `dimension_elements retype`); grid dimensions made before the style kept the old type (fixed with C#) |
+| F4 | `manage_graphics_standards`/`manage_view_templates`: match subcategory names with or without `<>` |
+| F5 | `manage_annotation_types`: skip read-only settings with a warning instead of failing the item |
+| F6 | `manage_view_templates`: report "plan template (Structural)"; warn on inherited Floors transparency; reject `:` in names up front |
+| F7 | `set_grid_display`: compact response |
+| F8 | Tags: Mark-based labels need a one-time seed tag family (the API cannot create labels) |
+| F9 | Snap tool for model positions (orthogonal and inclined grids) |
+
+### Live retest of F1–F7 / snap / tag tools (2026-10-04, deploy 23:14)
+
+- **`snap_to_grid`:**
+  - The dry run exposed a mistake made earlier with C#: a global 50 mm round had pushed the columns on grids 6/7 (2830/13530) 20–30 mm off. Global rounding is wrong when grids are not on the 50 mm module, so use `axes:'grid'`.
+  - Repaired with two passes: step 100 (cap 30), which brought 6/7 back to 0 and the inclined-grid drift (2–5 mm) to 0; then step 50, which brought the C4 offsets from grid 1 from −551.8 to −550.
+  - 277 + 65 moves, no timeout (batched moves); legitimate offsets (650, 950, −550) are protected by maxShiftMm.
+  - Walls: the dry run was OK, but it was not applied because wall ends snap independently and could open gaps at joined corners. Needed: snap whole wall runs (both ends together) or only the across axis.
+- **`dimension_elements`:** `replaceExisting` category-wide removed 73 and created 73. Wall runs: lengths read to the outside of corners (3448–3451 vs PDF 3450; the walls still carry ±2 mm noise). The C4 columns now read `500 | 500`.
+- **`style_tag_families`:** 4 tag families restyled to Arial 2.5 / 0.85 and reloaded. The dry run showed grid heads at 4.5 mm, so they were deliberately excluded (bubble text should stay larger).
+- **`tag_elements` placement:**
+  - Columns `topRight`: all 14 placed consistently.
+  - Beams `above` with Model orientation: aligned with the inclined beams; avoidOverlaps shifted 12 with auto leaders and 0 still overlap.
+  - Still open: a few tags end up far from their beam after shifting; `untaggedOnly:false` duplicates the existing tags — add `replaceExisting` to tag_elements.

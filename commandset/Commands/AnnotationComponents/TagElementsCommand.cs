@@ -6,7 +6,7 @@ namespace RevitMCPCommandSet.Commands.AnnotationComponents
     public class TagElementsCommand : JsonParameterCommandBase
     {
         public TagElementsCommand(UIApplication uiApp)
-            : base(new TagElementsEventHandler(), uiApp, 120000)
+            : base(new TagElementsEventHandler(), uiApp, 300000)
         {
         }
 
