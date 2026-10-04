@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCPCommandSet.Models.Common;
@@ -21,7 +20,7 @@ namespace RevitMCPCommandSet.Services.Structure
         protected override AIResult<object> Run(UIDocument uiDoc, JObject parameters)
         {
             var target = uiDoc.Document;
-            var source = OpenSource(target, parameters, out var openedHere);
+            var source = SourceDocumentUtils.Open(target, parameters.Value<string>("sourceDocument"), parameters.Value<string>("sourcePath"), out var openedHere);
             try
             {
                 if (source.Equals(target))
@@ -61,48 +60,12 @@ namespace RevitMCPCommandSet.Services.Structure
             }
         }
 
-        private static Document OpenSource(Document target, JObject parameters, out bool openedHere)
-        {
-            openedHere = false;
-            var app = target.Application;
-            var title = parameters.Value<string>("sourceDocument");
-            var path = parameters.Value<string>("sourcePath");
-            if (!string.IsNullOrWhiteSpace(title))
-            {
-                var docs = app.Documents.Cast<Document>().Where(d => !d.IsFamilyDocument).ToList();
-                return docs.FirstOrDefault(d => string.Equals(d.Title, title.Trim(), StringComparison.OrdinalIgnoreCase))
-                       ?? docs.FirstOrDefault(d => d.Title.IndexOf(title.Trim(), StringComparison.OrdinalIgnoreCase) >= 0)
-                       ?? throw new ArgumentException($"No open project titled '{title}'. Open: {string.Join(", ", docs.Select(d => d.Title))}.");
-            }
-
-            if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("Give sourceDocument (title of an open project) or sourcePath (.rvt/.rte).");
-            if (!System.IO.File.Exists(path))
-                throw new ArgumentException($"File not found: {path}");
-
-            var open = app.Documents.Cast<Document>().FirstOrDefault(d =>
-                !string.IsNullOrEmpty(d.PathName) && string.Equals(System.IO.Path.GetFullPath(d.PathName), System.IO.Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase));
-            if (open != null)
-                return open;
-
-            var options = new OpenOptions { Audit = false };
-            if (BasicFileInfo.Extract(path).IsWorkshared)
-            {
-                options.DetachFromCentralOption = DetachFromCentralOption.DetachAndDiscardWorksets;
-                options.SetOpenWorksetsConfiguration(new WorksetConfiguration(WorksetConfigurationOption.CloseAllWorksets));
-            }
-            var doc = app.OpenDocumentFile(ModelPathUtils.ConvertUserVisiblePathToModelPath(path), options)
-                      ?? throw new InvalidOperationException($"Revit could not open {path}.");
-            openedHere = true;
-            return doc;
-        }
-
         private static object List(Document source, List<string> categories)
         {
             var counts = new FilteredElementCollector(source).OfClass(typeof(FamilyInstance)).Cast<FamilyInstance>()
                 .GroupBy(i => i.Symbol.Family.Id.GetValue()).ToDictionary(g => g.Key, g => g.Count());
             var families = new FilteredElementCollector(source).OfClass(typeof(Family)).Cast<Family>()
-                .Where(f => InCategories(f.FamilyCategory, categories))
+                .Where(f => SourceDocumentUtils.InCategories(f.FamilyCategory, categories))
                 .OrderBy(f => f.FamilyCategory?.Name).ThenBy(f => f.Name)
                 .Select(f => new
                 {
@@ -113,7 +76,7 @@ namespace RevitMCPCommandSet.Services.Structure
                     inPlace = f.IsInPlace
                 }).ToList();
             var systemTypes = new FilteredElementCollector(source).WhereElementIsElementType()
-                .Where(t => !(t is FamilySymbol) && t.Category != null && t.Category.CategoryType == CategoryType.Model && InCategories(t.Category, categories))
+                .Where(t => !(t is FamilySymbol) && t.Category != null && t.Category.CategoryType == CategoryType.Model && SourceDocumentUtils.InCategories(t.Category, categories))
                 .GroupBy(t => t.Category.Name).OrderBy(g => g.Key)
                 .Select(g => new { category = g.Key, types = g.Select(t => t.Name).OrderBy(n => n).ToList() }).ToList();
             return new { source = source.Title, familyCount = families.Count, families = families.Take(MaxListed), systemTypes };
@@ -131,7 +94,7 @@ namespace RevitMCPCommandSet.Services.Structure
                     var category = token.Type == JTokenType.Object ? token.Value<string>("category") : null;
                     if (string.IsNullOrWhiteSpace(name))
                         throw new ArgumentException("Each families item needs a name (wildcards * and ? allowed).");
-                    var matches = all.Where(f => Like(f.Name, name) && InCategories(f.FamilyCategory, category == null ? null : new List<string> { category })).ToList();
+                    var matches = all.Where(f => SourceDocumentUtils.Like(f.Name, name) && SourceDocumentUtils.InCategories(f.FamilyCategory, category == null ? null : new List<string> { category })).ToList();
                     if (matches.Count == 0)
                         unmatched.Add(name);
                     picked.AddRange(matches);
@@ -139,39 +102,15 @@ namespace RevitMCPCommandSet.Services.Structure
             }
             else if (categories.Count > 0)
             {
-                picked.AddRange(all.Where(f => InCategories(f.FamilyCategory, categories)));
+                picked.AddRange(all.Where(f => SourceDocumentUtils.InCategories(f.FamilyCategory, categories)));
             }
             return picked.GroupBy(f => f.Id).Select(g => g.First()).ToList();
         }
 
         private static object CopyFamily(Document source, Document target, Family family, bool overwrite, string folder)
         {
-            if (family.IsInPlace)
-                throw new ArgumentException($"'{family.Name}' is an in-place family and cannot be copied.");
-            if (!family.IsEditable)
-                throw new ArgumentException($"'{family.Name}' is not editable (system or locked family).");
-
-            var existing = FindFamily(target, family.Name);
-            string savedPath = null;
-            var familyDoc = source.EditFamily(family);
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(folder))
-                {
-                    savedPath = System.IO.Path.Combine(folder, SafeFileName(family.Name) + ".rfa");
-                    familyDoc.SaveAs(savedPath, new SaveAsOptions { OverwriteExistingFile = true });
-                }
-
-                if (existing == null || overwrite)
-                    familyDoc.LoadFamily(target, new LoadFamilyEventHandler.OverwriteOptions(overwrite));
-            }
-            finally
-            {
-                familyDoc.Close(false);
-            }
-
-            var loaded = FindFamily(target, family.Name)
-                         ?? throw new InvalidOperationException($"Revit did not load '{family.Name}'.");
+            var copied = SourceDocumentUtils.CopyFamily(source, target, family, overwrite, folder);
+            var loaded = copied.Family;
             var types = loaded.GetFamilySymbolIds().Select(id => target.GetElement(id)).Where(e => e != null)
                 .Select(e => new { typeId = e.Id.GetValue(), name = e.Name }).OrderBy(t => t.name).ToList();
             return new
@@ -180,9 +119,9 @@ namespace RevitMCPCommandSet.Services.Structure
                 familyName = loaded.Name,
                 familyId = loaded.Id.GetValue(),
                 category = loaded.FamilyCategory?.Name,
-                loaded = existing == null || overwrite,
-                alreadyInProject = existing != null,
-                savedPath,
+                loaded = copied.Loaded,
+                alreadyInProject = copied.AlreadyInProject,
+                savedPath = copied.SavedPath,
                 typeCount = types.Count,
                 types = types.Take(50)
             };
@@ -207,7 +146,7 @@ namespace RevitMCPCommandSet.Services.Structure
                     continue;
                 }
                 var matches = sourceTypes.OfType<ElementType>()
-                    .Where(t => Like(t.Name, name) && InCategories(t.Category, category == null ? null : new List<string> { category })).ToList();
+                    .Where(t => SourceDocumentUtils.Like(t.Name, name) && SourceDocumentUtils.InCategories(t.Category, category == null ? null : new List<string> { category })).ToList();
                 if (matches.Count == 0)
                 {
                     results.Add(Failure(index, $"No system type matching '{name}'{(category == null ? "" : " in " + category)} in '{source.Title}'."));
@@ -226,7 +165,7 @@ namespace RevitMCPCommandSet.Services.Structure
                 using (var transaction = DocumentationUtils.StartTransaction(target, "MCP: Copy System Types"))
                 {
                     var options = new CopyPasteOptions();
-                    options.SetDuplicateTypeNamesHandler(new UseDestinationTypes());
+                    options.SetDuplicateTypeNamesHandler(new SourceDocumentUtils.UseDestinationTypes());
                     foreach (var (_, type) in copyNow)
                     {
                         var ids = ElementTransformUtils.CopyElements(source, new List<ElementId> { type.Id }, target, Transform.Identity, options);
@@ -263,39 +202,6 @@ namespace RevitMCPCommandSet.Services.Structure
                 .Any(t => t.Category?.Id.GetValue() == type.Category.Id.GetValue() && string.Equals(t.Name, type.Name, StringComparison.OrdinalIgnoreCase));
         }
 
-        private static Family FindFamily(Document doc, string name)
-        {
-            return new FilteredElementCollector(doc).OfClass(typeof(Family)).Cast<Family>()
-                .FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static bool InCategories(Category category, List<string> categories)
-        {
-            if (categories == null || categories.Count == 0)
-                return true;
-            if (category == null)
-                return false;
-            return categories.Any(c =>
-            {
-                var bic = c.Trim().StartsWith("OST_", StringComparison.OrdinalIgnoreCase) ? c.Trim() : "OST_" + c.Trim().Replace(" ", "");
-                return (Enum.TryParse(bic, true, out BuiltInCategory parsed) && category.Id.GetValue() == (long)parsed)
-                       || string.Equals(category.Name, c.Trim(), StringComparison.OrdinalIgnoreCase);
-            });
-        }
-
-        private static bool Like(string value, string pattern)
-        {
-            if (pattern.IndexOfAny(new[] { '*', '?' }) < 0)
-                return string.Equals(value, pattern.Trim(), StringComparison.OrdinalIgnoreCase);
-            var regex = "^" + Regex.Escape(pattern.Trim()).Replace("\\*", ".*").Replace("\\?", ".") + "$";
-            return Regex.IsMatch(value, regex, RegexOptions.IgnoreCase);
-        }
-
-        private static string SafeFileName(string name)
-        {
-            return System.IO.Path.GetInvalidFileNameChars().Aggregate(name, (current, c) => current.Replace(c, '_'));
-        }
-
         private static JObject Isolate(int index, Func<object> action)
         {
             try
@@ -314,14 +220,6 @@ namespace RevitMCPCommandSet.Services.Structure
         private static JObject Failure(int index, string message)
         {
             return new JObject { ["index"] = index, ["success"] = false, ["message"] = message };
-        }
-
-        private class UseDestinationTypes : IDuplicateTypeNamesHandler
-        {
-            public DuplicateTypeAction OnDuplicateTypeNamesFound(DuplicateTypeNamesHandlerArgs args)
-            {
-                return DuplicateTypeAction.UseDestinationTypes;
-            }
         }
     }
 }

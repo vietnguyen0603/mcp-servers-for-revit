@@ -69,7 +69,7 @@ namespace RevitMCPCommandSet.Services.Views
             };
         }
 
-        private static ElementId ResolveLevel(Document doc, JToken token, string key)
+        internal static ElementId ResolveLevel(Document doc, JToken token, string key)
         {
             if (token.Type == JTokenType.String)
             {
