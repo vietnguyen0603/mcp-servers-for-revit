@@ -31,9 +31,10 @@ namespace RevitMCPCommandSet.Services.Structure
                 if (parameters.Value<bool?>("listOnly") == true)
                     return Ok($"Listed families of '{source.Title}'.", List(source, categories));
 
-                var families = SelectFamilies(source, parameters["families"] as JArray, categories);
+                var unmatched = new List<string>();
+                var families = SelectFamilies(source, parameters["families"] as JArray, categories, unmatched);
                 var systemTypes = parameters["systemTypes"] as JArray;
-                if (families.Count == 0 && (systemTypes == null || systemTypes.Count == 0))
+                if (families.Count == 0 && unmatched.Count == 0 && (systemTypes == null || systemTypes.Count == 0))
                     throw new ArgumentException("Nothing to copy: give families, categories or systemTypes (use listOnly to see what the source has).");
 
                 var overwrite = parameters.Value<bool?>("overwrite") ?? false;
@@ -42,6 +43,9 @@ namespace RevitMCPCommandSet.Services.Structure
                     System.IO.Directory.CreateDirectory(folder);
 
                 var results = new List<JObject>();
+                // A wrong name must not waste the (slow) source open: report it and copy the rest.
+                foreach (var name in unmatched)
+                    results.Add(Failure(results.Count, $"No family matching '{name}' in '{source.Title}' (use listOnly)."));
                 foreach (var family in families)
                     results.Add(Isolate(results.Count, () => CopyFamily(source, target, family, overwrite, folder)));
                 if (systemTypes != null && systemTypes.Count > 0)
@@ -115,7 +119,7 @@ namespace RevitMCPCommandSet.Services.Structure
             return new { source = source.Title, familyCount = families.Count, families = families.Take(MaxListed), systemTypes };
         }
 
-        private static List<Family> SelectFamilies(Document source, JArray requested, List<string> categories)
+        private static List<Family> SelectFamilies(Document source, JArray requested, List<string> categories, List<string> unmatched)
         {
             var all = new FilteredElementCollector(source).OfClass(typeof(Family)).Cast<Family>().ToList();
             var picked = new List<Family>();
@@ -129,7 +133,7 @@ namespace RevitMCPCommandSet.Services.Structure
                         throw new ArgumentException("Each families item needs a name (wildcards * and ? allowed).");
                     var matches = all.Where(f => Like(f.Name, name) && InCategories(f.FamilyCategory, category == null ? null : new List<string> { category })).ToList();
                     if (matches.Count == 0)
-                        throw new ArgumentException($"No family matching '{name}' in '{source.Title}' (use listOnly).");
+                        unmatched.Add(name);
                     picked.AddRange(matches);
                 }
             }
