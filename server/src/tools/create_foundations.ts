@@ -79,7 +79,7 @@ export function registerCreateFoundationsTool(server: McpServer) {
   server.tool(
     "create_foundations",
     "Create structural foundations in bulk (hundreds of piles in one call). All lengths are millimetres. kind:'isolated' places a footing / pile cap family at x,y on a level (topOffset = top of footing relative to the level, rotationDeg). " +
-      "kind:'pile' places a structural column (or foundation) family as a pile spanning [top - length, top]; the top is topElevation (absolute), or the underside of a foundation given by underFoundationId or underFoundationMark (caps created earlier in the same call count). " +
+      "kind:'pile' places a pile spanning [top - length, top]; the top is topElevation (absolute), or the underside of a foundation given by underFoundationId or underFoundationMark (caps created earlier in the same call count). Use a Structural Foundations pile family (e.g. 'Pile-Steel Pipe'; length is an instance or type parameter Length/Depth - one type per length). Structural column families are refused under isolated footings because Revit attaches the footing to the column base and drops the cap to the pile bottom. " +
       "kind:'capSlab' makes a polygonal pile cap (hexagonal, triangular, ...) as a foundation slab with thickness or typeId. " +
       "Items come from `foundations` and/or a local dataFile (JSON/JSONL/CSV; CSV headers like kind,familyName,typeName,x,y,underFoundationMark,length). Put caps before their piles. Sent in chunks of 300 (one undo step and one transaction per chunk, each item isolated); each item reports id, elevations and warnings.",
     {

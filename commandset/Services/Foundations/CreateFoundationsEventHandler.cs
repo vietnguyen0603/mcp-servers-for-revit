@@ -111,6 +111,13 @@ namespace RevitMCPCommandSet.Services.Foundations
             string placedAs;
             if (DocumentationUtils.IsCategory(symbol, BuiltInCategory.OST_StructuralColumns))
             {
+                // Revit attaches an isolated footing to the base of any structural column inside its footprint
+                // when the transaction commits: the cap would drop to the pile bottom.
+                var footing = IsolatedFootingOver(ctx, x, y, top);
+                if (footing != null)
+                    throw new ArgumentException(
+                        $"'{symbol.FamilyName}' is a structural column family; Revit would attach footing {footing.Id.GetValue()} to the pile bottom and drop it {FoundationModelUtils.ToMm(length)} mm. " +
+                        "Use a Structural Foundations pile family (e.g. 'Pile-Steel Pipe' via load_family, length = type parameter Depth/Length), or make the cap a capSlab.");
                 instance = doc.Create.NewFamilyInstance(new XYZ(x, y, level.Elevation), symbol, level, StructuralType.Column)
                            ?? throw new InvalidOperationException("Revit did not place the pile.");
                 // Base offset first (top is still above), then top on the same level, then the top offset.
@@ -270,6 +277,21 @@ namespace RevitMCPCommandSet.Services.Foundations
             return box.Min.Z;
         }
 
+        /// <summary>An isolated footing (family instance) whose plan box contains (x, y) and sits at or above the pile top.</summary>
+        private static Element IsolatedFootingOver(FoundationModelUtils.Context ctx, double x, double y, double top)
+        {
+            if (ctx.NeedsRegenerate)
+            {
+                ctx.Doc.Regenerate();
+                ctx.NeedsRegenerate = false;
+            }
+            var probe = new Outline(new XYZ(x - 0.01, y - 0.01, top - 1), new XYZ(x + 0.01, y + 0.01, top + 100));
+            return new FilteredElementCollector(ctx.Doc).OfCategory(BuiltInCategory.OST_StructuralFoundation)
+                .OfClass(typeof(FamilyInstance)).WherePasses(new BoundingBoxIntersectsFilter(probe))
+                .Cast<FamilyInstance>().FirstOrDefault(f => f.StructuralType == StructuralType.Footing
+                                                            && !DocumentationUtils.IsCategory(f.Symbol, BuiltInCategory.OST_StructuralColumns));
+        }
+
         private static void SetRequired(Element element, BuiltInParameter id, double value)
         {
             var parameter = element.get_Parameter(id);
@@ -308,7 +330,7 @@ namespace RevitMCPCommandSet.Services.Foundations
         /// <summary>Foundation-family piles: set an instance length parameter, else check the type's length.</summary>
         private static void SetPileLength(FamilyInstance instance, FamilySymbol symbol, double length, List<string> warnings)
         {
-            foreach (var name in new[] { "Length", "Pile Length", "L" })
+            foreach (var name in new[] { "Length", "Pile Length", "Depth", "L" })
             {
                 var parameter = instance.LookupParameter(name);
                 if (parameter != null && !parameter.IsReadOnly && parameter.StorageType == StorageType.Double)
@@ -316,7 +338,7 @@ namespace RevitMCPCommandSet.Services.Foundations
                     if (parameter.Set(length)) return;
                 }
             }
-            foreach (var name in new[] { "Length", "Pile Length", "L" })
+            foreach (var name in new[] { "Length", "Pile Length", "Depth", "L" })
             {
                 var parameter = symbol.LookupParameter(name);
                 if (parameter != null && parameter.StorageType == StorageType.Double)
