@@ -31,6 +31,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: true,
     keywords: ["screenshot", "image", "zoom to fit", "refresh", "preview", "check result"],
   },
+  get_document_info: {
+    catalogs: ["core"],
+    readOnly: true,
+    keywords: ["document", "project", "file", "title", "path", "units", "levels", "workshared", "saved", "open documents"],
+  },
 
   // architecture / structure modelling
   create_point_based_element: {
@@ -60,6 +65,17 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   },
   create_level: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "elevation", "storey"] },
   create_grid: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "axis", "gridline"] },
+  create_grids: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["datum", "axis", "gridline", "grid names", "irregular spacing", "arc grid", "replace"],
+  },
+  modify_levels: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["datum", "level", "rename", "elevation", "storey", "building story", "structural plan", "floor plan"],
+  },
   create_room: { catalogs: ["architecture"], readOnly: false, keywords: ["space"] },
   create_structural_framing_system: {
     catalogs: ["structure"],

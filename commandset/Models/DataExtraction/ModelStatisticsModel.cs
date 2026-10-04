@@ -61,6 +61,16 @@ namespace RevitMCPCommandSet.Models.DataExtraction
         [JsonProperty("projectName")]
         public string ProjectName { get; set; }
 
+        [JsonProperty("documentTitle")]
+        public string DocumentTitle { get; set; }
+
+        [JsonProperty("documentPath")]
+        public string DocumentPath { get; set; }
+
+        /// <summary>Project Information "Project Name" parameter (may be empty).</summary>
+        [JsonProperty("projectInformationName")]
+        public string ProjectInformationName { get; set; }
+
         [JsonProperty("totalElements")]
         public int TotalElements { get; set; }
 

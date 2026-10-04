@@ -5,7 +5,7 @@ import { withRevitConnection } from "../utils/ConnectionManager.js";
 export function registerAnalyzeModelStatisticsTool(server: McpServer) {
   server.tool(
     "analyze_model_statistics",
-    "Analyze model complexity with element counts. Returns detailed statistics about the Revit model including total element counts, total types, total families, views, sheets, counts by category (with type/family breakdown), and level-by-level element distribution. Useful for model auditing, performance analysis, and understanding model composition.",
+    "Analyze model complexity with element counts. Returns detailed statistics about the Revit model including projectName (the document title; documentTitle, documentPath and projectInformationName are also returned), total element counts, total types, total families, views, sheets, counts by category (with type/family breakdown), and level-by-level element distribution. Useful for model auditing, performance analysis, and understanding model composition.",
     {
       includeDetailedTypes: z
         .boolean()
