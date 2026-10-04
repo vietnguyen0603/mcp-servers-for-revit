@@ -237,3 +237,31 @@ The test produced three A1 sheets at 1:150 in `Nexus_T3_MCP.rvt`: S-BB-100100 PI
 | D14 | **Sections / callouts on plans** | The PDF has sections 1-1/2-2 on the column sheet; create_view can make sections but there is no "section from plan with tags on sheet" workflow | Combine create_view (section) + place_viewport (works) — needs a recipe/skill rather than a tool |
 | D15 | **Slab thickness tags / spot elevations** | The PDF has PT-250 / S-300 labels and +138.250 spots; create_spot_elevations exists but there is no floor tag type with thickness | Floor tag family with thickness (D5) + spot elevations |
 | D16 | **copy_to_levels report** | `extraCopies` is noisy when beams were trimmed by joins (the copies are correct) | Match copies by element id order or by bounding-box centre |
+
+### Live retest of the drawing-style tools (2026-10-04, after deploy)
+
+The retest was done with tools only, except where noted.
+
+- **Worked:**
+  - `open_document` from the start page.
+  - `manage_graphics_standards`: the S-HIDDEN pattern and style.
+  - `manage_annotation_types`: the S-DIM and S-TEXT types, set as defaults.
+  - `manage_view_templates`: framing, column and foundation templates.
+  - `set_grid_display`: bubbles by side.
+  - `probe_tag_types`, `create_project_parameter`.
+  - `dimension_elements`: the column plan got 73 dimensions (28 for columns, 25 wall thicknesses, 20 wall lengths), and its `replaceExisting` cleanly replaced the 72 prototype dimensions.
+- **Lesson (user):** dashed beams under the slab need a structural plan plus beams joined to the slab. The template inherited **Floors transparency 100** from the project's structural plan defaults, which made the slab invisible. Fixed with `modify categories [{Floors, reset, transparency 0}]`, then hiding the surface fill. Plan templates always report ViewType FloorPlan; that is Revit behaviour.
+- **Model QA through dimensions:** the dimensions exposed ±5 mm extraction errors (C2 read `5 | 1095`). 307 orthogonal columns were snapped to 50 mm (with C#; it timed out on the MCP side but completed). Needed: an `align_to_grid` / snap tool.
+- **Fixes still to make:**
+
+| # | Fix |
+|---|---|
+| F1 | `dimension_elements`: `typeNameContains`/`familyNameContains` filter (caps without piles); `replaceExisting` should clear all dimensions of the selected categories, not just those of the selected ids |
+| F2 | `dimension_elements`: merge collinear/joined wall pieces into runs so core walls get outline dimensions; end faces of joined walls are missing |
+| F3 | Retype existing dimensions (`modify_annotations` or `dimension_elements retype`); grid dimensions made before the style kept the old type (fixed with C#) |
+| F4 | `manage_graphics_standards`/`manage_view_templates`: match subcategory names with or without `<>` |
+| F5 | `manage_annotation_types`: skip read-only settings with a warning instead of failing the item |
+| F6 | `manage_view_templates`: report "plan template (Structural)"; warn on inherited Floors transparency; reject `:` in names up front |
+| F7 | `set_grid_display`: compact response |
+| F8 | Tags: Mark-based labels need a one-time seed tag family (the API cannot create labels) |
+| F9 | Snap tool for model positions (orthogonal and inclined grids) |
