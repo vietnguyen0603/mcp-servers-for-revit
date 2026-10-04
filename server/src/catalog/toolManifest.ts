@@ -230,6 +230,21 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   },
   export_sheets: { catalogs: ["views"], readOnly: false, keywords: ["pdf", "dwg", "print", "publish", "export"] },
   export_view_image: { catalogs: ["views"], readOnly: false, keywords: ["image", "png", "jpg", "snapshot", "export"] },
+  crop_image_grid: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["crop", "grid", "pixel", "coordinates", "zoom", "png", "sheet image", "redraw", "trace"],
+  },
+  overlay_images: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["overlay", "compare", "diff", "difference", "rebuilt", "original", "misplaced", "png"],
+  },
+  image_info: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["image size", "pixels", "dpi", "px per inch", "png", "sheet export"],
+  },
   list_revisions: { catalogs: ["views"], readOnly: true, keywords: ["revision", "sequence", "issue"] },
   create_revision: { catalogs: ["views"], readOnly: false, keywords: ["revision", "issue", "sequence"] },
   update_sheets: {
