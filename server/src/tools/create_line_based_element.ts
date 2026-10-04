@@ -5,7 +5,7 @@ import { withRevitConnection } from "../utils/ConnectionManager.js";
 export function registerCreateLineBasedElementTool(server: McpServer) {
   server.tool(
     "create_line_based_element",
-    "Create one or more line-based elements in Revit such as walls, beams, or pipes. Supports batch creation with detailed parameters including family type ID, start and end points, thickness, height, and level information. All units are in millimeters (mm).",
+    "Create one or more line-based elements in Revit such as walls, beams, or pipes. Supports batch creation with detailed parameters including family type ID, start and end points, thickness, height, and level information. All units are in millimeters (mm). Walls: with typeId the type is used as is; without typeId a basic wall type of exactly `thickness` mm is found or created; structural:true makes it a structural wall; when a level sits exactly at baseLevel+baseOffset+height the wall top is attached to it. Beams (OST_StructuralFraming): place on the level at baseLevel (top-justified); thickness/height are ignored - choose the section with typeId (see create_family_type).",
     {
       data: z
         .array(
@@ -31,6 +31,7 @@ export function registerCreateLineBasedElementTool(server: McpServer) {
                 }),
               })
               .describe("The line defining the element's location"),
+            structural: z.boolean().optional().describe("Walls: structural usage (default false)"),
             thickness: z
               .number()
               .describe(

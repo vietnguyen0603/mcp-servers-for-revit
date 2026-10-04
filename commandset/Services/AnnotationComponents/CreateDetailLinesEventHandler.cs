@@ -27,7 +27,8 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     : defaultStyle;
 
                 var ids = new List<long>();
-                foreach (var curve in BuildCurves(view, (JObject)item))
+                var warnings = new List<string>();
+                foreach (var curve in BuildCurves(view, (JObject)item, warnings))
                 {
                     var detailCurve = doc.Create.NewDetailCurve(view, curve);
                     if (style != null)
@@ -35,19 +36,26 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     ids.Add(detailCurve.Id.GetValue());
                 }
 
-                return new { detailCurveIds = ids };
+                return warnings.Count > 0
+                    ? (object)new { detailCurveIds = ids, warnings }
+                    : new { detailCurveIds = ids };
             });
 
             return Ok($"Created detail lines for {results.Count(r => r.Value<bool>("success"))} of {results.Count} items in '{view.Name}'.",
                 DocumentationUtils.Summarize(results));
         }
 
-        private static List<Curve> BuildCurves(View view, JObject item)
+        private static List<Curve> BuildCurves(View view, JObject item, List<string> warnings)
         {
             if (item["points"] != null)
             {
                 var points = DetailGeometry.ReadPoints(view, item["points"], "points", 2);
-                return DetailGeometry.Polyline(points, item.Value<bool?>("closed") ?? false);
+                var closed = item.Value<bool?>("closed") ?? false;
+                var radii = ReadFilletRadii(item, points.Count);
+                return radii == null
+                    ? DetailGeometry.Polyline(points, closed)
+                    : DetailGeometry.FilletedPolyline(points, radii, closed,
+                        view.Document.Application.ShortCurveTolerance, warnings);
             }
 
             if (item["center"] != null)
@@ -80,6 +88,25 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var a = DetailGeometry.ReadPoint(view, item["start"], "start");
             var b = DetailGeometry.ReadPoint(view, item["end"], "end");
             return new List<Curve> { Line.CreateBound(a, b) };
+        }
+
+        /// <summary>Per-vertex fillet radii in feet from filletRadii (mm) or filletRadius (mm); null when none.</summary>
+        private static List<double> ReadFilletRadii(JObject item, int count)
+        {
+            if (item["filletRadii"] is JArray array)
+            {
+                if (array.Count != count)
+                    throw new ArgumentException($"'filletRadii' must have one value per point ({count}).");
+                var radii = array.Select(v => v.Value<double>()).ToList();
+                if (radii.Any(r => r < 0 || double.IsNaN(r) || double.IsInfinity(r)))
+                    throw new ArgumentException("'filletRadii' must be non-negative (mm).");
+                return radii.Any(r => r > 0) ? radii.Select(DocumentationUtils.MmToFeet).ToList() : null;
+            }
+
+            var radius = item.Value<double?>("filletRadius") ?? 0;
+            if (radius < 0)
+                throw new ArgumentException("'filletRadius' must be non-negative (mm).");
+            return radius > 0 ? Enumerable.Repeat(DocumentationUtils.MmToFeet(radius), count).ToList() : null;
         }
     }
 }

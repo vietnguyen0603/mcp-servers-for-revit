@@ -31,6 +31,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: true,
     keywords: ["screenshot", "image", "zoom to fit", "refresh", "preview", "check result"],
   },
+  get_document_info: {
+    catalogs: ["core"],
+    readOnly: true,
+    keywords: ["document", "project", "file", "title", "path", "units", "levels", "workshared", "saved", "open documents"],
+  },
 
   // architecture / structure modelling
   create_point_based_element: {
@@ -48,13 +53,59 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["floor", "slab", "ceiling", "roof"],
   },
+  create_family_type: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["type", "duplicate", "section", "size", "family type", "steel section", "thickness", "footing size"],
+  },
+  load_family: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["load", "family", "rfa", "library", "pile cap", "column family", "beam family"],
+  },
+  copy_families: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["copy", "transfer", "family", "families", "type", "reference model", "template", "library", "rfa", "system type", "floor type"],
+  },
+  create_slabs: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["floor", "slab", "opening", "shaft", "step", "drop", "foundation slab", "raft", "basement slab", "bulk", "csv"],
+  },
+  create_foundations: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["footing", "pile", "pile cap", "isolated footing", "foundation", "bulk", "csv", "hexagonal cap"],
+  },
   create_level: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "elevation", "storey"] },
   create_grid: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "axis", "gridline"] },
+  create_grids: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["datum", "axis", "gridline", "grid names", "irregular spacing", "arc grid", "replace"],
+  },
+  modify_levels: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["datum", "level", "rename", "elevation", "storey", "building story", "structural plan", "floor plan"],
+  },
   create_room: { catalogs: ["architecture"], readOnly: false, keywords: ["space"] },
   create_structural_framing_system: {
     catalogs: ["structure"],
     readOnly: false,
     keywords: ["beam system", "joist", "framing"],
+  },
+  create_structural_columns: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["column", "steel column", "place columns", "bulk", "csv", "storey", "level to level"],
+  },
+  create_beams: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["beam", "girder", "joist", "framing", "steel beam", "bulk", "csv", "justification"],
   },
   get_grid_register_data: { catalogs: ["structure"], readOnly: true, keywords: ["register", "schedule", "axis"] },
   get_column_wall_register_data: {
@@ -77,7 +128,7 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["tag", "label", "beam", "column", "door", "window", "untagged", "drafting"],
   },
-  create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting"] },
+  create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting", "leader"] },
   get_view_annotations: {
     catalogs: ["annotate", "views"],
     readOnly: true,
@@ -87,12 +138,27 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     catalogs: ["annotate"],
     readOnly: false,
     destructive: true,
-    keywords: ["edit", "move", "copy", "rotate", "delete", "text", "line style", "drafting", "2d"],
+    keywords: ["edit", "move", "copy", "rotate", "delete", "text", "line style", "drafting", "2d", "leader", "dimension text", "override", "mirror", "flip"],
   },
   create_detail_lines: {
     catalogs: ["annotate"],
     readOnly: false,
     keywords: ["detail line", "detail curve", "arc", "line style", "drafting"],
+  },
+  array_annotations: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["array", "repeat", "spacing", "o.c.", "on center", "pattern", "copy", "rebar dots", "nails", "screws", "drafting"],
+  },
+  list_detail_groups: {
+    catalogs: ["annotate"],
+    readOnly: true,
+    keywords: ["detail group", "group type", "typical", "symbol", "library", "drafting"],
+  },
+  modify_detail_groups: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["detail group", "place group", "create group", "ungroup", "typical", "symbol", "drafting"],
   },
   create_filled_region: {
     catalogs: ["annotate"],
@@ -103,6 +169,45 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     catalogs: ["annotate"],
     readOnly: false,
     keywords: ["detail component", "detail item", "repeating detail", "drafting"],
+  },
+  place_annotation_symbol: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: [
+      "generic annotation",
+      "symbol",
+      "subtitle",
+      "sub-detail title",
+      "weld symbol",
+      "elevation marker",
+      "leader",
+      "drafting",
+    ],
+  },
+  draw_detail: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: [
+      "typical detail",
+      "build",
+      "redraw",
+      "image",
+      "pixels",
+      "inches",
+      "tag",
+      "batch",
+      "drafting view",
+      "detail line",
+      "filled region",
+      "dimension",
+      "text",
+      "drafting",
+    ],
+  },
+  create_drafted_table: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["table", "schedule", "grid", "merged cells", "rebar schedule", "drafted schedule", "drafting"],
   },
   create_revision_cloud: { catalogs: ["annotate"], readOnly: false, keywords: ["revision", "cloud", "markup"] },
   create_grid_dimensions: {
@@ -127,6 +232,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["rebar", "multi-rebar", "reinforcement", "tag", "dimension"],
   },
+  list_drafting_types: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["text type", "dimension type", "filled region type", "line style", "viewport type", "title block", "standards", "drafting"],
+  },
 
   // views / sheets
   list_views: {
@@ -143,6 +253,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   duplicate_view: { catalogs: ["views"], readOnly: false, keywords: ["copy", "dependent", "detailing"] },
   create_sheet: { catalogs: ["views"], readOnly: false, keywords: ["sheet", "titleblock", "title block", "revision"] },
   place_viewport: { catalogs: ["views"], readOnly: false, keywords: ["viewport", "sheet", "place view", "layout"] },
+  update_viewports: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["viewport", "detail number", "renumber", "anchor", "align", "viewport type", "title", "label", "sheet"],
+  },
   create_schedule: {
     catalogs: ["views", "analyze"],
     readOnly: false,
@@ -166,6 +281,21 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   },
   export_sheets: { catalogs: ["views"], readOnly: false, keywords: ["pdf", "dwg", "print", "publish", "export"] },
   export_view_image: { catalogs: ["views"], readOnly: false, keywords: ["image", "png", "jpg", "snapshot", "export"] },
+  crop_image_grid: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["crop", "grid", "pixel", "coordinates", "zoom", "png", "sheet image", "redraw", "trace"],
+  },
+  overlay_images: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["overlay", "compare", "diff", "difference", "rebuilt", "original", "misplaced", "png"],
+  },
+  image_info: {
+    catalogs: ["views"],
+    readOnly: true,
+    keywords: ["image size", "pixels", "dpi", "px per inch", "png", "sheet export"],
+  },
   list_revisions: { catalogs: ["views"], readOnly: true, keywords: ["revision", "sequence", "issue"] },
   create_revision: { catalogs: ["views"], readOnly: false, keywords: ["revision", "issue", "sequence"] },
   update_sheets: {
@@ -177,6 +307,38 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   set_crop_region: { catalogs: ["views"], readOnly: false, keywords: ["crop", "crop box", "annotation crop", "extent"] },
   set_view_range: { catalogs: ["views"], readOnly: false, keywords: ["view range", "cut plane", "view depth", "plan"] },
   align_viewports: { catalogs: ["views"], readOnly: false, keywords: ["viewport", "align", "sheet", "layout"] },
+
+  // detail library / sheet workflows
+  audit_detail_references: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["section cut", "bubble", "detail number", "sheet number", "view reference", "dead", "qa", "library"],
+  },
+  sync_detail_references: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["section cut", "bubble", "detail number", "sheet number", "renumber", "fix references", "library"],
+  },
+  create_view_reference: {
+    catalogs: ["annotate", "views"],
+    readOnly: false,
+    keywords: ["reference callout", "reference section", "view reference", "live reference", "drafting"],
+  },
+  copy_view_contents: {
+    catalogs: ["views", "annotate"],
+    readOnly: false,
+    keywords: ["copy", "paste", "transfer", "library", "drafting", "detail", "other document"],
+  },
+  copy_drafting_views: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["insert views from file", "import", "library", "typical detail", "drafting view", "transfer"],
+  },
+  layout_detail_sheet: {
+    catalogs: ["views"],
+    readOnly: false,
+    keywords: ["sheet", "layout", "grid", "module", "detail number", "viewport", "typical detail", "pack"],
+  },
 
   // modify
   operate_element: {

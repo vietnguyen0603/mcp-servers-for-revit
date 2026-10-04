@@ -62,7 +62,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     region = FilledRegion.Create(doc, ResolveType(doc, item), view.Id, loops);
                 }
 
-                var lineStyle = DetailGeometry.ResolveLineStyle(doc, item.Value<string>("lineStyle"));
+                var lineStyle = ResolveBoundaryLineStyle(doc, item.Value<string>("lineStyle"));
                 if (lineStyle != null)
                 {
                     if (!FilledRegion.IsValidLineStyleIdForFilledRegion(doc, lineStyle.Id))
@@ -75,6 +75,39 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 
             return Ok($"Created {results.Count(r => r.Value<bool>("success"))} of {results.Count} regions in '{view.Name}'.",
                 DocumentationUtils.Summarize(results));
+        }
+
+        /// <summary>
+        ///     Resolves a boundary line style by exact (case-insensitive) name.
+        ///     "Invisible", "Invisible lines" and "&lt;Invisible lines&gt;" map to the
+        ///     built-in invisible-lines graphics style, which is not listed among
+        ///     the Lines subcategories.
+        /// </summary>
+        private static GraphicsStyle ResolveBoundaryLineStyle(Document doc, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+
+            var key = name.Trim().TrimStart('<').TrimEnd('>').Trim();
+            if (string.Equals(key, "Invisible", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(key, "Invisible lines", StringComparison.OrdinalIgnoreCase))
+            {
+                return FindInvisibleLinesStyle(doc)
+                       ?? throw new ArgumentException("The <Invisible lines> line style was not found in this document.");
+            }
+
+            return DetailGeometry.ResolveLineStyle(doc, name);
+        }
+
+        private static GraphicsStyle FindInvisibleLinesStyle(Document doc)
+        {
+            var invisibleId = (long)BuiltInCategory.OST_InvisibleLines;
+            var styles = new FilteredElementCollector(doc).OfClass(typeof(GraphicsStyle)).Cast<GraphicsStyle>().ToList();
+            return styles.FirstOrDefault(s => s.GraphicsStyleType == GraphicsStyleType.Projection
+                                              && s.GraphicsStyleCategory?.Id.GetValue() == invisibleId)
+                   ?? styles.FirstOrDefault(s => s.GraphicsStyleType == GraphicsStyleType.Projection
+                                                 && string.Equals(s.Name, "<Invisible lines>", StringComparison.OrdinalIgnoreCase))
+                   ?? Category.GetCategory(doc, BuiltInCategory.OST_InvisibleLines)?.GetGraphicsStyle(GraphicsStyleType.Projection);
         }
 
         private static ElementId ResolveType(Document doc, JObject item)

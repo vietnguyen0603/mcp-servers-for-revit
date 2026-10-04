@@ -18,15 +18,56 @@ namespace RevitMCPCommandSet.Services.Views
         protected override AIResult<object> Run(UIDocument uiDoc, JObject parameters)
         {
             var doc = uiDoc.Document;
+            var previous = uiDoc.ActiveView;
+            var restoreActiveView = parameters.Value<bool?>("restoreActiveView") ?? false;
+            var openBefore = new HashSet<long>(uiDoc.GetOpenUIViews().Select(v => v.ViewId.GetValue()));
 
             var viewId = parameters.Value<long?>("viewId");
-            if (viewId.HasValue && viewId.Value != uiDoc.ActiveView.Id.GetValue())
+            if (viewId.HasValue && viewId.Value != previous.Id.GetValue())
             {
                 if (!(doc.GetElement(viewId.Value.ToRevitElementId()) is View view) || view.IsTemplate)
                     return Fail($"View {viewId.Value} was not found or is a view template.");
                 uiDoc.ActiveView = view;
             }
 
+            try
+            {
+                return Capture(uiDoc, parameters, restoreActiveView && uiDoc.ActiveView.Id != previous.Id);
+            }
+            finally
+            {
+                if (restoreActiveView)
+                    RestoreActiveView(uiDoc, previous, openBefore);
+            }
+        }
+
+        /// <summary>
+        ///     Switches back to the view that was active before the capture and
+        ///     closes the captured view's window if the capture opened it, so the
+        ///     captured view can be deleted afterwards (Revit cannot delete the
+        ///     active view).
+        /// </summary>
+        private static void RestoreActiveView(UIDocument uiDoc, View previous, HashSet<long> openBefore)
+        {
+            var captured = uiDoc.ActiveView;
+            if (captured.Id == previous.Id)
+                return;
+            uiDoc.ActiveView = previous;
+            if (openBefore.Contains(captured.Id.GetValue()))
+                return;
+            try
+            {
+                uiDoc.GetOpenUIViews().FirstOrDefault(v => v.ViewId == captured.Id)?.Close();
+            }
+            catch (Exception)
+            {
+                // Leaving the window open is harmless; the view is no longer active.
+            }
+        }
+
+        private AIResult<object> Capture(UIDocument uiDoc, JObject parameters, bool willRestore)
+        {
+            var doc = uiDoc.Document;
             var active = uiDoc.ActiveView;
             var zoomToFit = parameters.Value<bool?>("zoomToFit") ?? true;
             var zoomed = false;
@@ -82,6 +123,7 @@ namespace RevitMCPCommandSet.Services.Views
                     ? (int?)null
                     : active.Scale,
                 zoomedToFit = zoomed,
+                restoredActiveView = willRestore,
                 file
             });
         }

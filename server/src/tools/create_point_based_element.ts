@@ -5,7 +5,7 @@ import { withRevitConnection } from "../utils/ConnectionManager.js";
 export function registerCreatePointBasedElementTool(server: McpServer) {
   server.tool(
     "create_point_based_element",
-    "Create one or more point-based elements in Revit such as doors, windows, or furniture. Supports batch creation with detailed parameters including family type ID, position, dimensions, and level information. All units are in millimeters (mm).",
+    "Create one or more point-based elements in Revit such as doors, windows, furniture, structural columns and isolated footings/pile caps. Supports batch creation with detailed parameters including family type ID, position, dimensions, and level information. All units are in millimeters (mm). Elevation rule for every category: the element sits on the level nearest to baseLevel (an elevation in mm) plus baseOffset; locationPoint.z is ignored for level-based placement. Columns span from that base up `height` mm (top level = nearest level at the top). Footings are created as structural footings with their top at baseLevel+baseOffset.",
     {
       data: z
         .array(

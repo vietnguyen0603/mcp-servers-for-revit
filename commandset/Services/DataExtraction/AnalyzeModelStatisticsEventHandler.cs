@@ -32,8 +32,10 @@ namespace RevitMCPCommandSet.Services.DataExtraction
             {
                 var doc = app.ActiveUIDocument.Document;
 
-                // Get project name
-                string projectName = doc.Title;
+                // Project name = the document title (file name without extension), never a view name
+                string projectName = !string.IsNullOrEmpty(doc.PathName)
+                    ? System.IO.Path.GetFileNameWithoutExtension(doc.PathName)
+                    : doc.Title;
 
                 // Count total elements
                 int totalElements = new FilteredElementCollector(doc)
@@ -145,6 +147,9 @@ namespace RevitMCPCommandSet.Services.DataExtraction
                 ResultInfo = new AnalyzeModelStatisticsResult
                 {
                     ProjectName = projectName,
+                    DocumentTitle = doc.Title,
+                    DocumentPath = string.IsNullOrEmpty(doc.PathName) ? null : doc.PathName,
+                    ProjectInformationName = doc.ProjectInformation?.Name,
                     TotalElements = totalElements,
                     TotalTypes = totalTypes,
                     TotalFamilies = familyNames.Count,

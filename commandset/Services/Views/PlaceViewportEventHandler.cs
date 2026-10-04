@@ -9,7 +9,8 @@ namespace RevitMCPCommandSet.Services.Views
     ///     Places views on sheets. Ordinary views become viewports centred on
     ///     <c>center</c>; schedules become schedule sheet instances whose
     ///     top-left corner is at <c>center</c>. Sheet coordinates are mm and
-    ///     default to the centre of the sheet outline.
+    ///     default to the centre of the sheet outline. Viewports can then be
+    ///     anchored (a view point moved onto a sheet point) and numbered.
     /// </summary>
     public class PlaceViewportEventHandler : JsonParameterEventHandler
     {
@@ -35,6 +36,10 @@ namespace RevitMCPCommandSet.Services.Views
 
             var point = DocumentationUtils.ReadPointMm(item["center"]) ?? SheetCenter(sheet);
             point = new XYZ(point.X, point.Y, 0);
+
+            var detailNumber = item.Value<string>("detailNumber");
+            if (view is ViewSchedule && (!string.IsNullOrWhiteSpace(detailNumber) || item["anchor"] is JObject))
+                throw new ArgumentException("anchor and detailNumber apply to viewports, not schedules.");
 
             if (view is ViewSchedule schedule)
             {
@@ -64,13 +69,25 @@ namespace RevitMCPCommandSet.Services.Views
             if (!string.IsNullOrWhiteSpace(rotation))
                 viewport.Rotation = DocumentationUtils.ParseEnum(rotation, ViewportRotation.None);
 
+            JObject anchor = null;
+            if (ViewportUtils.TryReadAnchor(item, out var viewPoint, out var sheetPoint))
+            {
+                doc.Regenerate();
+                anchor = ViewportUtils.Anchor(doc, viewport, viewPoint, sheetPoint);
+            }
+
+            if (!string.IsNullOrWhiteSpace(detailNumber))
+                ViewportUtils.AssignDetailNumber(doc, viewport, detailNumber.Trim());
+
             return new
             {
                 kind = "viewport",
                 viewportId = viewport.Id.GetValue(),
                 sheetId = sheet.Id.GetValue(),
                 viewId = view.Id.GetValue(),
-                center = DocumentationUtils.PointToMm(viewport.GetBoxCenter())
+                center = DocumentationUtils.PointToMm(viewport.GetBoxCenter()),
+                detailNumber = ViewportUtils.DetailNumber(viewport),
+                anchor
             };
         }
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { withRevitConnection } from "./ConnectionManager.js";
+import { applyBatchOutcome } from "./batchOutcome.js";
 
 /** Shared input schemas and transport for the view, sheet and annotation tools. */
 
@@ -27,19 +28,23 @@ interface RevitResult {
 
 /**
  * Sends a command to Revit and renders the `{ success, message, response }`
- * result as MCP text content, flagging `success: false` as an error.
+ * result as MCP text content, flagging `success: false` as an error. Batch
+ * results whose items all failed are errors too; partial failures get a
+ * WARNING line (see batchOutcome.ts).
  */
-export async function sendDocumentationCommand(command: string, params: unknown) {
+export async function sendDocumentationCommand(command: string, params: unknown, timeoutMs?: number) {
   try {
     const response = await withRevitConnection(async (revitClient) => {
-      return await revitClient.sendCommand(command, params);
+      return timeoutMs === undefined
+        ? await revitClient.sendCommand(command, params)
+        : await revitClient.sendCommand(command, params, timeoutMs);
     });
     const result = response as RevitResult | null;
     const failed = result?.success === false || result?.Success === false;
-    return {
+    return applyBatchOutcome(response, {
       content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }],
       ...(failed ? { isError: true } : {}),
-    };
+    });
   } catch (error) {
     return {
       content: [

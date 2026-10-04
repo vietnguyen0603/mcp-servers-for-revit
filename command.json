@@ -219,6 +219,21 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "array_annotations",
+      "description": "Copy view-specific elements in a linear array or to a list of points",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_detail_groups",
+      "description": "List detail group types with instance and member counts",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "modify_detail_groups",
+      "description": "Place, create or ungroup detail groups",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "capture_view",
       "description": "Zoom the active view to fit and capture it as a PNG",
       "assemblyPath": "RevitMCPCommandSet.dll"
@@ -279,6 +294,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "place_annotation_symbol",
+      "description": "Place generic annotation symbols with parameters and leaders in a view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_revision_cloud",
       "description": "Create revision clouds in a view",
       "assemblyPath": "RevitMCPCommandSet.dll"
@@ -306,6 +326,96 @@
     {
       "commandName": "create_rebar_annotation",
       "description": "Create multi-rebar annotations and rebar tags",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "audit_detail_references",
+      "description": "Audit manual detail-reference bubbles and live view references against placed viewports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "sync_detail_references",
+      "description": "Rewrite detail/sheet numbers of manual detail-reference bubbles",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_view_reference",
+      "description": "Place reference callouts or reference sections pointing to existing views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_view_contents",
+      "description": "Copy view-specific elements between views, optionally from another open document",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_drafting_views",
+      "description": "Copy drafting views and their contents from another open document",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "layout_detail_sheet",
+      "description": "Lay out views on a detail sheet in a module grid and number them",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "list_drafting_types",
+      "description": "List text, dimension, filled region, line style, viewport and title block types",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "update_viewports",
+      "description": "Renumber, retype, move, anchor and adjust titles of placed viewports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_family_type",
+      "description": "Duplicate a family/system type and set its type parameters (sizes, thickness)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "load_family",
+      "description": "Load .rfa families by path, library search or folder (selected types optional)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_families",
+      "description": "Copy families and system types from another open project or .rvt file",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_grids",
+      "description": "Create named grids from lines, arcs or an axes table (skip/error/replace existing)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "modify_levels",
+      "description": "Rename/move levels, set Building Story, create missing structural/floor plans",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_document_info",
+      "description": "Active document title, path, units, active view, levels and open documents",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_structural_columns",
+      "description": "Place structural columns between levels in bulk",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_beams",
+      "description": "Place structural beams on levels in bulk (offsets, justification, usage, joins)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_slabs",
+      "description": "Create floors and foundation slabs with openings, offsets and slope arrows",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_foundations",
+      "description": "Create isolated footings, piles and polygonal pile caps in bulk",
       "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]

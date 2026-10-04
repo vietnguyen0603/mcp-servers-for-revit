@@ -51,6 +51,12 @@ public class LineElement
     /// <summary>
     ///     Base offset / face-based offset
     /// </summary>
+    /// <summary>
+    ///     Structural flag for floors and walls (default false)
+    /// </summary>
+    [JsonProperty("structural")]
+    public bool? Structural { get; set; }
+
     [JsonProperty("baseOffset")]
     public double BaseOffset { get; set; }
 

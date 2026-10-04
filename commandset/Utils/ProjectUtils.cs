@@ -9,6 +9,16 @@ namespace RevitMCPCommandSet.Utils
 {
     public static class ProjectUtils
     {
+        /// <summary>Structural type matching the family category (footings, columns, framing), else non-structural.</summary>
+        public static StructuralType StructuralTypeFor(FamilySymbol symbol)
+        {
+            var category = symbol.Category?.Id.GetIntValue() ?? 0;
+            if (category == (int)BuiltInCategory.OST_StructuralFoundation) return StructuralType.Footing;
+            if (category == (int)BuiltInCategory.OST_StructuralColumns) return StructuralType.Column;
+            if (category == (int)BuiltInCategory.OST_StructuralFraming) return StructuralType.Beam;
+            return StructuralType.NonStructural;
+        }
+
         /// <summary>
         /// General-purpose method for creating a family instance
         /// </summary>
@@ -58,14 +68,22 @@ namespace RevitMCPCommandSet.Utils
                 case FamilyPlacementType.OneLevelBased:
                     if (locationPoint == null)
                         throw new ArgumentNullException($"Required argument {typeof(XYZ)} {nameof(locationPoint)} is missing!");
-                    // With level information
+                    // With level information: Revit reads the point's Z as an offset from the level, so place at the
+                    // level and set the offset explicitly (baseOffset is relative to the level, in feet).
                     if (baseLevel != null)
                     {
                         instance = doc.Create.NewFamilyInstance(
-                            locationPoint,                  // Physical location where the instance will be placed
-                            familySymbol,                   // FamilySymbol representing the type of instance to insert
-                            baseLevel,                      // Level used as the object's base level
-                            StructuralType.NonStructural);  // Structural type of the element, if structural
+                            new XYZ(locationPoint.X, locationPoint.Y, 0),
+                            familySymbol,
+                            baseLevel,
+                            StructuralTypeFor(familySymbol));
+                        if (instance != null && baseOffset != -1)
+                        {
+                            Parameter offsetParam = instance.get_Parameter(BuiltInParameter.INSTANCE_ELEVATION_PARAM)
+                                                    ?? instance.get_Parameter(BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM);
+                            if (offsetParam != null && !offsetParam.IsReadOnly)
+                                offsetParam.Set(baseOffset);
+                        }
                     }
                     // Without level information
                     else
@@ -73,7 +91,7 @@ namespace RevitMCPCommandSet.Utils
                         instance = doc.Create.NewFamilyInstance(
                             locationPoint,                  // Physical location where the instance will be placed
                             familySymbol,                   // FamilySymbol representing the type of instance to insert
-                            StructuralType.NonStructural);  // Structural type of the element, if structural
+                            StructuralTypeFor(familySymbol));
                     }
                     break;
 

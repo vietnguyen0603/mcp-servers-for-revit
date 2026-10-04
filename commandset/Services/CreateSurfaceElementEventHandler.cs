@@ -101,6 +101,24 @@ namespace RevitMCPCommandSet.Services
                     switch (builtInCategory)
                     {
                         case BuiltInCategory.OST_Floors:
+                            if (floorType == null && data.Thickness > 0)
+                            {
+                                // No usable typeId: get or create a floor type of the requested thickness
+                                using (var typeTransaction = new Transaction(doc, "Create Floor Type"))
+                                {
+                                    typeTransaction.Start();
+                                    floorType = CreateOrGetFloorType(doc, data.Thickness / 304.8);
+                                    typeTransaction.Commit();
+                                }
+                                if (requestedTypeId != -1 && requestedTypeId != 0)
+                                    _warnings.Add($"Requested floor typeId {requestedTypeId} not found. Used '{floorType.Name}' for thickness {data.Thickness} mm.");
+                            }
+                            else if (floorType != null && data.Thickness > 0)
+                            {
+                                var typeThickness = floorType.GetCompoundStructure()?.GetWidth() * 304.8 ?? 0;
+                                if (Math.Abs(typeThickness - data.Thickness) > 1)
+                                    _warnings.Add($"Floor type '{floorType.Name}' is {typeThickness:0} mm; requested thickness {data.Thickness} mm ignored because typeId was given.");
+                            }
                             if (floorType == null)
                             {
                                 // Requested typeId was invalid or not provided, fall back to first available
@@ -202,12 +220,13 @@ namespace RevitMCPCommandSet.Services
 #if REVIT2023_OR_GREATER
                                 floor = Floor.Create(doc, new List<CurveLoop> { curveLoop }, floorType.Id, baseLevel.Id);
 #else
-                                floor = doc.Create.NewFloor(curves, floorType, baseLevel, _structural);
+                                floor = doc.Create.NewFloor(curves, floorType, baseLevel, data.Structural ?? false);
 #endif
                                 //Edit floor parameters
                                 if (floor != null)
                                 {
                                     floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM).Set(baseOffset);
+                                    floor.get_Parameter(BuiltInParameter.FLOOR_PARAM_IS_STRUCTURAL)?.Set((data.Structural ?? false) ? 1 : 0);
                                     elementIds.Add(floor.Id.GetIntValue());
                                 }
                                 break;
@@ -318,58 +337,34 @@ namespace RevitMCPCommandSet.Services
         /// <returns>Floor type matching the thickness</returns>
         private FloorType CreateOrGetFloorType(Document doc, double thickness = 200 / 304.8)
         {
-
-            // Look for a floor type with a matching thickness
+            string name = $"{_floorName}{Math.Round(thickness * 304.8)}mm";
             FloorType existingType = new FilteredElementCollector(doc)
-                                     .OfClass(typeof(FloorType))                    // FloorType elements only
-                                     .OfCategory(BuiltInCategory.OST_Floors)        // Floors category only
-                                     .Cast<FloorType>()                            // Cast to FloorType
-                                     .FirstOrDefault(w => w.Name == $"{_floorName}{thickness * 304.8}mm");
+                                     .OfClass(typeof(FloorType))
+                                     .OfCategory(BuiltInCategory.OST_Floors)
+                                     .Cast<FloorType>()
+                                     .FirstOrDefault(w => w.Name == name);
             if (existingType != null)
                 return existingType;
-            // No matching floor type found, so create a new one
-            FloorType baseFloorType = existingType = new FilteredElementCollector(doc)
-                                     .OfClass(typeof(FloorType))                    // FloorType elements only
-                                     .OfCategory(BuiltInCategory.OST_Floors)        // Floors category only
-                                     .Cast<FloorType>()                            // Cast to FloorType
-                                     .FirstOrDefault(w => w.Name.Contains("Generic"));
-            if (existingType != null)
-            {
-                baseFloorType = existingType = new FilteredElementCollector(doc)
-                                     .OfClass(typeof(FloorType))                    // FloorType elements only
-                                     .OfCategory(BuiltInCategory.OST_Floors)        // Floors category only
-                                     .Cast<FloorType>()                            // Cast to FloorType
-                                     .FirstOrDefault();
-            }
 
-            // Duplicate the floor type
-            FloorType newFloorType = null;
-            newFloorType = baseFloorType.Duplicate($"{_floorName}{thickness * 304.8}mm") as FloorType;
+            // Base: the type with the fewest layers (ideally a single concrete/generic layer)
+            FloorType baseFloorType = new FilteredElementCollector(doc)
+                                     .OfClass(typeof(FloorType))
+                                     .OfCategory(BuiltInCategory.OST_Floors)
+                                     .Cast<FloorType>()
+                                     .Where(t => t.GetCompoundStructure() != null)
+                                     .OrderBy(t => t.GetCompoundStructure().LayerCount)
+                                     .ThenBy(t => t.Name.Contains("Generic") || t.Name.Contains("Concrete") ? 0 : 1)
+                                     .FirstOrDefault()
+                                     ?? throw new InvalidOperationException("No layered floor type available to duplicate.");
 
-            // Set the thickness of the new floor type
-            // Get the compound structure
+            FloorType newFloorType = baseFloorType.Duplicate(name) as FloorType;
             CompoundStructure cs = newFloorType.GetCompoundStructure();
-            if (cs != null)
-            {
-                // Get all layers
-                IList<CompoundStructureLayer> layers = cs.GetLayers();
-                if (layers.Count > 0)
-                {
-                    // Compute the current total thickness
-                    double currentTotalThickness = cs.GetWidth();
-
-                    // Scale each layer's thickness proportionally
-                    for (int i = 0; i < layers.Count; i++)
-                    {
-                        CompoundStructureLayer layer = layers[i];
-                        double newLayerThickness = thickness;
-                        cs.SetLayerWidth(i, newLayerThickness);
-                    }
-
-                    // Apply the modified compound structure
-                    newFloorType.SetCompoundStructure(cs);
-                }
-            }
+            int core = Math.Max(cs.GetFirstCoreLayerIndex(), 0);
+            double others = cs.GetWidth() - cs.GetLayerWidth(core);
+            if (thickness - others <= 0.001)
+                throw new ArgumentException($"Thickness {thickness * 304.8:0} mm is smaller than the base type's finish layers ({others * 304.8:0} mm).");
+            cs.SetLayerWidth(core, thickness - others);
+            newFloorType.SetCompoundStructure(cs);
             return newFloorType;
         }
 

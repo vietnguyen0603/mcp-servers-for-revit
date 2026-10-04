@@ -8,6 +8,7 @@ import {
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import { CATALOGS, CORE_CATALOG, resolveCatalog } from "./catalogs.js";
 import { TOOL_MANIFEST, type ToolManifestEntry } from "./toolManifest.js";
+import { flagBatchFailures } from "../utils/batchOutcome.js";
 
 /**
  * - `dynamic`: expose core tools plus the catalog meta tools; other catalogs
@@ -115,6 +116,12 @@ export class ToolCatalog {
         if (typeof value !== "function") return value;
         if (prop === "tool" || prop === "registerTool") {
           return (name: string, ...rest: unknown[]) => {
+            // Flag batch results with failed items, whatever the tool facade did.
+            const last = rest.length - 1;
+            if (last >= 0 && typeof rest[last] === "function") {
+              const handler = rest[last] as (...args: unknown[]) => unknown;
+              rest[last] = async (...args: unknown[]) => flagBatchFailures(await handler(...args));
+            }
             const handle = (value as (...args: unknown[]) => RegisteredTool).call(target, name, ...rest);
             entries.set(name, { name, handle, meta: TOOL_MANIFEST[name] });
             return handle;

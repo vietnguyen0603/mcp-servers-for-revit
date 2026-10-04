@@ -5,7 +5,7 @@ import { withRevitConnection } from "../utils/ConnectionManager.js";
 export function registerCreateSurfaceBasedElementTool(server: McpServer) {
   server.tool(
     "create_surface_based_element",
-    "Create one or more surface-based elements in Revit such as floors, ceilings, or roofs. Supports batch creation with detailed parameters including family type ID, boundary lines, thickness, and level information. All units are in millimeters (mm).",
+    "Create one or more surface-based elements in Revit such as floors, ceilings, or roofs. Supports batch creation with detailed parameters including family type ID, boundary lines, thickness, and level information. All units are in millimeters (mm). Floors: with typeId the type is used as is (a warning reports a thickness mismatch); without typeId a floor type of exactly `thickness` mm is found or created ('Generic - <t>mm'). Set structural:true for structural slabs. Only an outer loop is supported (no openings yet).",
     {
       data: z
         .array(
@@ -42,7 +42,8 @@ export function registerCreateSurfaceBasedElementTool(server: McpServer) {
                   .describe("Array of line segments defining the boundary"),
               })
               .describe("Boundary definition with outer loop"),
-            thickness: z.number().describe("Thickness of the element"),
+            thickness: z.number().describe("Thickness in mm; for floors without typeId it selects/creates a type of this thickness"),
+            structural: z.boolean().optional().describe("Floors: mark as structural (default false)"),
             baseLevel: z.number().describe("Base level height"),
             baseOffset: z.number().describe("Offset from the base level"),
           })
