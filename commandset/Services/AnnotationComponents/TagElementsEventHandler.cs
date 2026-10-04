@@ -1,4 +1,4 @@
-using Autodesk.Revit.DB.Architecture;
+﻿using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCPCommandSet.Models.Common;
@@ -42,7 +42,11 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 return Fail($"View '{view.Name}' cannot host element tags.");
 
             var targets = CollectTargets(doc, view, parameters, out var skipped);
-            var untaggedOnly = parameters.Value<bool?>("untaggedOnly") ?? true;
+            var replaceExisting = parameters.Value<bool?>("replaceExisting") ?? false;
+            var replacedTags = 0;
+            if (replaceExisting && targets.Count > 0)
+                replacedTags = DeleteExistingTags(doc, view, new HashSet<long>(targets.Select(e => e.Id.GetValue())));
+            var untaggedOnly = !replaceExisting && (parameters.Value<bool?>("untaggedOnly") ?? true);
             if (untaggedOnly)
             {
                 var tagged = TaggedElementIds(doc, view);
@@ -75,7 +79,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var offset = DocumentationUtils.ReadPointMm(parameters["offset"]) ?? XYZ.Zero;
             var normalOffset = DocumentationUtils.MmToFeet(parameters.Value<double?>("offsetAlongNormalMm") ?? 0);
             var avoidOverlaps = parameters.Value<bool?>("avoidOverlaps") ?? false;
-            var maxShiftTries = Math.Max(1, Math.Min(parameters.Value<int?>("maxShiftTries") ?? 8, 40));
+            var maxShiftTries = Math.Max(1, Math.Min(parameters.Value<int?>("maxShiftTries") ?? 24, 90));
             var shiftStepMm = parameters.Value<double?>("shiftStepMm");
             var shiftStep = shiftStepMm != null && shiftStepMm > 0 ? DocumentationUtils.MmToFeet(shiftStepMm.Value) : (double?)null;
 
@@ -86,6 +90,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             if (leaderMode != null && leaderMode != "auto" && leaderMode != "none" && leaderMode != "always")
                 return Fail("leader must be 'auto', 'none' or 'always'.");
             var leaderThreshold = DocumentationUtils.MmToFeet((parameters.Value<double?>("leaderThresholdPaperMm") ?? 5.0) * scale);
+            var maxShift = DocumentationUtils.MmToFeet((parameters.Value<double?>("maxShiftPaperMm") ?? 12.0) * scale);
             // With a placement preset or a leader mode the leader is added after the tag has been positioned.
             var deferLeader = placement != null || leaderMode != null;
             var createLeader = !deferLeader && addLeader;
@@ -183,7 +188,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 var headBefore = HeadPosition(tagElement);
                 if (avoidOverlaps)
                 {
-                    var placed = AvoidOverlap(doc, view, tagElement, lineDirection, occupied, maxShiftTries, shiftStep, out var rect, out var blocker, out var shifted);
+                    var placed = AvoidOverlap(doc, view, tagElement, lineDirection, occupied, maxShiftTries, shiftStep, maxShift, out var rect, out var blocker, out var shifted);
                     if (shifted)
                     {
                         result["shifted"] = true;
@@ -237,6 +242,11 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 ["skipped"] = JArray.FromObject(skipped)
             };
             var message = $"Created {created.Count} tags in '{view.Name}'; skipped {skipped.Count}.";
+            if (replaceExisting)
+            {
+                response["replacedTags"] = replacedTags;
+                message += $" Replaced {replacedTags} existing tags.";
+            }
             if (avoidOverlaps)
             {
                 response["shifted"] = shiftedCount;
@@ -568,7 +578,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
         ///     position overlaps; the tag is then left at its original position.
         /// </summary>
         private static bool AvoidOverlap(Document doc, View view, Element tag, XYZ lineDirection, List<Rect> occupied,
-            int maxTries, double? step, out Rect rect, out long? blocker, out bool shifted)
+            int maxTries, double? step, double maxShift, out Rect rect, out long? blocker, out bool shifted)
         {
             shifted = false;
             blocker = null;
@@ -592,22 +602,34 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var stepNormal = step ?? Math.Max(Extent(normal) * 1.1, 1e-3);
             var stepAlong = step ?? Math.Max(Extent(along) * 1.1, 1e-3);
 
-            var tried = 0;
-            for (var k = 1; tried < maxTries; k++)
+            // Candidate positions nearest first: slide along the element before stepping away from it,
+            // so a shifted tag stays beside its beam/wall; never further than maxShift.
+            var candidates = new List<Tuple<double, XYZ>>();
+            for (var j = -3; j <= 3; j++)
+            for (var i = -6; i <= 6; i++)
             {
-                foreach (var delta in new[] { normal * (k * stepNormal), normal * (-k * stepNormal), along * (k * stepAlong), along * (-k * stepAlong) })
+                if (i == 0 && j == 0) continue;
+                var delta = along * (i * stepAlong * 0.5) + normal * (j * stepNormal);
+                var length = delta.GetLength();
+                if (length > maxShift) continue;
+                // weight steps across the element: they move the tag away from what it labels
+                var cost = Math.Abs(i) * stepAlong * 0.5 + Math.Abs(j) * stepNormal * 1.6;
+                candidates.Add(Tuple.Create(cost, delta));
+            }
+
+            var tried = 0;
+            foreach (var candidate in candidates.OrderBy(c => c.Item1))
+            {
+                if (tried >= maxTries) break;
+                tried++;
+                MoveHead(doc, tag, start + candidate.Item2);
+                doc.Regenerate();
+                var moved = TagRect(tag, view);
+                if (moved != null && FirstOverlap(moved, occupied) == null)
                 {
-                    if (tried >= maxTries) break;
-                    tried++;
-                    MoveHead(doc, tag, start + delta);
-                    doc.Regenerate();
-                    var moved = TagRect(tag, view);
-                    if (moved != null && FirstOverlap(moved, occupied) == null)
-                    {
-                        rect = moved;
-                        shifted = true;
-                        return true;
-                    }
+                    rect = moved;
+                    shifted = true;
+                    return true;
                 }
             }
 
@@ -654,6 +676,34 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             }
 
             return targets.GroupBy(e => e.Id.GetValue()).Select(g => g.First()).OrderBy(e => e.Id.GetValue()).ToList();
+        }
+
+        /// <summary>Deletes this view's tags of the given elements (re-runs replace instead of duplicating).</summary>
+        private static int DeleteExistingTags(Document doc, View view, HashSet<long> elementIds)
+        {
+            var ids = new List<ElementId>();
+            foreach (var tag in new FilteredElementCollector(doc, view.Id).OfClass(typeof(IndependentTag)).Cast<IndependentTag>())
+            {
+#if REVIT2022_OR_GREATER
+                if (tag.GetTaggedLocalElementIds().Any(id => elementIds.Contains(id.GetValue()))) ids.Add(tag.Id);
+#else
+                if (elementIds.Contains(tag.TaggedLocalElementId.GetValue())) ids.Add(tag.Id);
+#endif
+            }
+
+            foreach (var roomTag in new FilteredElementCollector(doc, view.Id).OfCategory(BuiltInCategory.OST_RoomTags)
+                         .WhereElementIsNotElementType().OfType<RoomTag>())
+                if (elementIds.Contains(roomTag.TaggedLocalRoomId.GetValue())) ids.Add(roomTag.Id);
+
+            if (ids.Count == 0) return 0;
+            using (var t = new Transaction(doc, "MCP: Replace Tags"))
+            {
+                t.Start();
+                doc.Delete(ids);
+                t.Commit();
+            }
+
+            return ids.Count;
         }
 
         private static HashSet<long> TaggedElementIds(Document doc, View view)

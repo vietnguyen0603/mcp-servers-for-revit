@@ -104,3 +104,13 @@ describe("tag_elements placement presets", () => {
     expect(() => tag.parse({ categories: ["X"], offsetPaperMm: -1 })).toThrow();
   });
 });
+
+describe("tag_elements replaceExisting / maxShiftPaperMm", () => {
+  const schema = z.object(tagElementsShape);
+  it("accepts the re-run and shift-cap options", () => {
+    expect(schema.safeParse({ categories: ["OST_StructuralFraming"], replaceExisting: true, avoidOverlaps: true, maxShiftPaperMm: 12 }).success).toBe(true);
+  });
+  it("rejects a non-positive shift cap", () => {
+    expect(schema.safeParse({ maxShiftPaperMm: 0 }).success).toBe(false);
+  });
+});

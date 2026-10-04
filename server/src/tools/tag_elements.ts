@@ -17,7 +17,11 @@ export const tagElementsShape = {
     .max(512)
     .optional()
     .describe('Tag type by name instead of tagTypeId: "Family: Type" (e.g. "M_Structural Framing Tag: Standard"), a type name or a family name'),
-  untaggedOnly: z.boolean().optional().default(true).describe("Skip elements already tagged in the view"),
+  untaggedOnly: z.boolean().optional().default(true).describe("Skip elements already tagged in the view (ignored with replaceExisting)"),
+  replaceExisting: z
+    .boolean()
+    .optional()
+    .describe("Delete this view's existing tags of the target elements first, then tag them again - use for re-runs instead of untaggedOnly:false, which duplicates tags"),
   addLeader: z.boolean().optional().default(false).describe("Create tags with a leader (ignored when leader is given)"),
   placement: z
     .enum(["center", "above", "below", "left", "right", "topRight", "topLeft", "bottomRight", "bottomLeft"])
@@ -65,16 +69,22 @@ export const tagElementsShape = {
     .optional()
     .default(false)
     .describe(
-      "After placing each tag, if its box overlaps an existing tag in the view or one placed earlier in this run, shift it in steps perpendicular to and along the element until it is free (up to maxShiftTries positions); tags that stay overlapping are reported"
+      "After placing each tag, if its box overlaps an existing tag in the view or one placed earlier in this run, try nearby positions nearest first - sliding along the element before stepping away from it, never further than maxShiftPaperMm - until it is free (up to maxShiftTries positions); tags that stay overlapping are left in place and reported"
     ),
   maxShiftTries: z
     .number()
     .int()
     .min(1)
-    .max(40)
+    .max(90)
     .optional()
-    .default(8)
-    .describe("Positions tried per tag with avoidOverlaps (default 8)"),
+    .default(24)
+    .describe("Positions tried per tag with avoidOverlaps (default 24)"),
+  maxShiftPaperMm: z
+    .number()
+    .positive()
+    .max(200)
+    .optional()
+    .describe("Largest distance a tag may be moved by avoidOverlaps, printed mm (default 12) - keeps shifted tags next to the element they label"),
   shiftStepMm: z
     .number()
     .positive()
