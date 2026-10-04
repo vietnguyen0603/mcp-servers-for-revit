@@ -265,3 +265,17 @@ The retest was done with tools only, except where noted.
 | F7 | `set_grid_display`: compact response |
 | F8 | Tags: Mark-based labels need a one-time seed tag family (the API cannot create labels) |
 | F9 | Snap tool for model positions (orthogonal and inclined grids) |
+
+### Live retest of F1–F7 / snap / tag tools (2026-10-04, deploy 23:14)
+
+- **`snap_to_grid`:**
+  - The dry run exposed a mistake made earlier with C#: a global 50 mm round had pushed the columns on grids 6/7 (2830/13530) 20–30 mm off. Global rounding is wrong when grids are not on the 50 mm module, so use `axes:'grid'`.
+  - Repaired with two passes: step 100 (cap 30), which brought 6/7 back to 0 and the inclined-grid drift (2–5 mm) to 0; then step 50, which brought the C4 offsets from grid 1 from −551.8 to −550.
+  - 277 + 65 moves, no timeout (batched moves); legitimate offsets (650, 950, −550) are protected by maxShiftMm.
+  - Walls: the dry run was OK, but it was not applied because wall ends snap independently and could open gaps at joined corners. Needed: snap whole wall runs (both ends together) or only the across axis.
+- **`dimension_elements`:** `replaceExisting` category-wide removed 73 and created 73. Wall runs: lengths read to the outside of corners (3448–3451 vs PDF 3450; the walls still carry ±2 mm noise). The C4 columns now read `500 | 500`.
+- **`style_tag_families`:** 4 tag families restyled to Arial 2.5 / 0.85 and reloaded. The dry run showed grid heads at 4.5 mm, so they were deliberately excluded (bubble text should stay larger).
+- **`tag_elements` placement:**
+  - Columns `topRight`: all 14 placed consistently.
+  - Beams `above` with Model orientation: aligned with the inclined beams; avoidOverlaps shifted 12 with auto leaders and 0 still overlap.
+  - Still open: a few tags end up far from their beam after shifting; `untaggedOnly:false` duplicates the existing tags — add `replaceExisting` to tag_elements.
