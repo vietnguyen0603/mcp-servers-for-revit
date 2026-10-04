@@ -402,6 +402,16 @@
       "commandName": "create_beams",
       "description": "Place structural beams on levels in bulk (offsets, justification, usage, joins)",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_slabs",
+      "description": "Create floors and foundation slabs with openings, offsets and slope arrows",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_foundations",
+      "description": "Create isolated footings, piles and polygonal pile caps in bulk",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }
