@@ -84,5 +84,5 @@ export async function runFramingBulk<T>(
     );
   }
 
-  return formatBulkResult(command, await sendInChunks(command, {}, itemsKey, items));
+  return formatBulkResult(command, await sendInChunks(command, {}, itemsKey, items), { summary: args.summary === true });
 }

@@ -57,8 +57,10 @@ namespace revit_mcp_plugin.Core
             // You need to create events in the UI thread. 
             ExternalEvent externalEvent = null;
 
-            // Perform the operation that created the event using the context of the active document.
-            _uiApp.ActiveUIDocument.Document.Application.ExecuteCommand(
+            // Perform the operation that created the event in the Revit API context.
+            // Go through the Application, not the active document, so commands such
+            // as open_document also work when no document is open.
+            _uiApp.Application.ExecuteCommand(
                 (uiApp) => {
                     externalEvent = ExternalEvent.Create(handler);
                 }

@@ -29,10 +29,7 @@ namespace RevitMCPCommandSet.Services
         {
             try
             {
-                var uiDoc = app.ActiveUIDocument;
-                Result = uiDoc?.Document == null
-                    ? Fail("No active Revit document.")
-                    : Run(uiDoc, Parameters);
+                Result = RunWithApplication(app, Parameters);
             }
             catch (Exception ex)
             {
@@ -56,6 +53,19 @@ namespace RevitMCPCommandSet.Services
         public abstract string GetName();
 
         protected abstract AIResult<object> Run(UIDocument uiDoc, JObject parameters);
+
+        /// <summary>
+        ///     Entry point on the Revit main thread. The default requires an active
+        ///     document and calls <see cref="Run" />; commands that work without one
+        ///     (e.g. opening a document) override this.
+        /// </summary>
+        protected virtual AIResult<object> RunWithApplication(UIApplication app, JObject parameters)
+        {
+            var uiDoc = app.ActiveUIDocument;
+            return uiDoc?.Document == null
+                ? Fail("No active Revit document.")
+                : Run(uiDoc, parameters);
+        }
 
         protected static AIResult<object> Ok(string message, object response)
         {

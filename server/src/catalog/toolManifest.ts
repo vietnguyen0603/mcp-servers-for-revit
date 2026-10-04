@@ -71,12 +71,69 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   create_slabs: {
     catalogs: ["structure", "architecture"],
     readOnly: false,
-    keywords: ["floor", "slab", "opening", "shaft", "step", "drop", "foundation slab", "raft", "basement slab", "bulk", "csv"],
+    keywords: ["floor", "slab", "opening", "shaft", "step", "drop", "foundation slab", "raft", "basement slab", "bulk", "csv", "zone", "band", "drop panel", "thickening", "recess", "pt slab"],
   },
   create_foundations: {
     catalogs: ["structure"],
     readOnly: false,
     keywords: ["footing", "pile", "pile cap", "isolated footing", "foundation", "bulk", "csv", "hexagonal cap"],
+  },
+  pdf_extract: {
+    catalogs: ["structure", "views"],
+    readOnly: true,
+    keywords: ["pdf", "drawing", "vector", "calibrate", "scale", "grid bubble", "columns", "walls", "beams", "slab outline", "openings", "piles", "barrette", "takeoff", "coordinates", "model from pdf"],
+  },
+  create_family: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["family", "rfa", "parametric", "template", "pile", "barrette", "bored pile", "custom family", "build family", "missing family"],
+  },
+  create_openings: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["opening", "shaft", "void", "core", "lift shaft", "riser", "wall opening", "floor opening", "penetration", "bulk", "csv"],
+  },
+  create_stairs: {
+    catalogs: ["architecture", "structure"],
+    readOnly: false,
+    keywords: ["stair", "staircase", "flight", "landing", "u-shaped", "dog-leg", "riser", "tread", "core", "bulk"],
+  },
+  create_walls: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["wall", "core wall", "shear wall", "diaphragm wall", "retaining wall", "thickness", "bulk", "csv", "location line"],
+  },
+  save_document: { catalogs: ["core"], readOnly: false, keywords: ["save", "save as", "file", "rvt", "central", "compact"] },
+  open_document: {
+    catalogs: ["core"],
+    readOnly: false,
+    keywords: ["open", "new project", "template", "rvt", "detach", "central", "activate", "file"],
+  },
+  copy_to_levels: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["copy", "paste aligned", "selected levels", "typical floor", "repeat", "levels", "storey", "duplicate floor"],
+  },
+  set_workset: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["workset", "worksharing", "partition", "central", "list worksets"],
+  },
+  delete_elements: {
+    catalogs: ["modify"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["remove", "bulk", "purge", "filter", "comments", "rerun", "clean"],
+  },
+  join_elements: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["join geometry", "switch join order", "cut", "unjoin", "concrete", "clean up", "overlap"],
+  },
+  check_model: {
+    catalogs: ["analyze", "structure"],
+    readOnly: true,
+    keywords: ["qa", "qc", "audit", "clash", "overlap", "duplicate", "unsupported", "elevation", "count", "verify", "floating"],
   },
   create_level: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "elevation", "storey"] },
   create_grid: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "axis", "gridline"] },

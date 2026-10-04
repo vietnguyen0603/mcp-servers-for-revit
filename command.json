@@ -410,12 +410,67 @@
     },
     {
       "commandName": "create_slabs",
-      "description": "Create floors and foundation slabs with openings, offsets and slope arrows",
+      "description": "Create floors and foundation slabs with openings, offsets, slope arrows, zones and drop panels",
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
       "commandName": "create_foundations",
       "description": "Create isolated footings, piles and polygonal pile caps in bulk",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_family",
+      "description": "Build a parametric extruded family (rectangular/circular, e.g. barrette or bored pile) from a template, load it and create types",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_openings",
+      "description": "Create shaft openings between levels, rectangular wall openings and polygon floor openings in bulk",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_stairs",
+      "description": "Create straight or U-shaped component stairs between levels",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_walls",
+      "description": "Create walls from plan lines with base/top levels and offsets, type by thickness, location line",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "save_document",
+      "description": "Save the active document or Save As to a path",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "open_document",
+      "description": "Open a model or create a new project from a template and activate it",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_to_levels",
+      "description": "Copy elements of a source level to target levels, re-hosted with the same offsets (Paste Aligned to Selected Levels)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "delete_elements",
+      "description": "Bulk delete elements by category/level/comments/mark/type filter, dry run by default",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_workset",
+      "description": "Move filtered elements to a workset (create if missing), list worksets, optionally enable worksharing",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "join_elements",
+      "description": "Bulk join geometry between categories (by cuts cut) with switch join order, unjoin and batched transactions",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "check_model",
+      "description": "Read-only model QA: counts, elevations, overlaps/clashes, unsupported beams/columns, levels without floor",
       "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]

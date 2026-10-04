@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { bulkInputShape } from "../utils/bulkInput.js";
+import { runBulkCommand } from "../utils/bulkCommand.js";
 
 const parameterValue = z.union([z.number(), z.string().max(1024), z.boolean()]);
 
-const typeItem = z
+export const familyTypeItemSchema = z
   .object({
     newName: z.string().min(1).max(256).describe("Name of the type to create (or update if it exists)"),
     sourceTypeId: z.number().int().positive().optional().describe("Type to duplicate"),
@@ -43,14 +44,24 @@ const typeItem = z
     message: "Give sourceTypeId, familyName or category",
   });
 
+export type FamilyTypeItem = z.infer<typeof familyTypeItemSchema>;
+
 export function registerCreateFamilyTypeTool(server: McpServer) {
   server.tool(
     "create_family_type",
     "Create sized types by duplicating an existing family or system type and setting its type parameters - the step every structural model needs before placing elements: welded/rolled steel sections (WWF: d, bf, tw, tf), concrete columns and beams (b, h), footings/pile caps (Width, Length, Foundation Thickness), piles, and floor/wall/roof thickness (thickness, mm). " +
-      "Lengths given as numbers are millimetres. Re-running with the same newName updates the existing type (idempotent). Each item reports typeId, applied parameters and warnings (unknown parameter names come back with the list of the type's parameters). Load the family first with load_family. One undo step.",
+      "Lengths given as numbers are millimetres. Re-running with the same newName updates the existing type (idempotent). Each item reports typeId, applied parameters and warnings (unknown parameter names come back with the list of the type's parameters). Load the family first with load_family. " +
+      "For hundreds of types pass a local dataFile (JSON/JSONL/CSV; in CSV put parameters as JSON text, e.g. a column parameters = {\"b\":300,\"h\":600}, or as dotted headers parameters.b, parameters.h). Sent in chunks of 300, one undo step per chunk.",
     {
-      types: z.array(typeItem).min(1).max(500).describe("Types to create or update"),
+      types: z.array(familyTypeItemSchema).min(1).max(500).optional().describe("Types to create or update"),
+      ...bulkInputShape,
     },
-    async (args) => sendDocumentationCommand("create_family_type", args)
+    async (args) =>
+      runBulkCommand<FamilyTypeItem>("create_family_type", args, "types", {
+        itemSchema: familyTypeItemSchema,
+        jsonFields: ["parameters"],
+        stringFields: ["newName", "familyName", "typeName", "category"],
+        chunkSize: 300,
+      })
   );
 }

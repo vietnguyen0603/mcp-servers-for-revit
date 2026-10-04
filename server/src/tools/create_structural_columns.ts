@@ -49,6 +49,7 @@ export function registerCreateStructuralColumnsTool(server: McpServer) {
         items: args.columns,
         dataFile: args.dataFile,
         dataFormat: args.dataFormat,
+        summary: args.summary,
       })
   );
 }

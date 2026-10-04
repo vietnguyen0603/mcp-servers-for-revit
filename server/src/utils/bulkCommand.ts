@@ -26,6 +26,16 @@ export function decodeJsonFields(item: unknown, fields: readonly string[]): unkn
   return copy;
 }
 
+/** CSV turns numeric cells into numbers; turn the given name-like fields back into strings (e.g. a type named 300). */
+export function stringifyFields(item: unknown, fields: readonly string[]): unknown {
+  if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
+  const copy: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+  for (const field of fields) {
+    if (typeof copy[field] === "number" || typeof copy[field] === "boolean") copy[field] = String(copy[field]);
+  }
+  return copy;
+}
+
 /** Validates every item; throws listing the first invalid ones (indexes into the full list). */
 export function validateItems<T>(items: unknown[], schema: z.ZodType<T>, itemsKey: string): T[] {
   const errors: string[] = [];
@@ -47,13 +57,15 @@ export function validateItems<T>(items: unknown[], schema: z.ZodType<T>, itemsKe
 export interface BulkCommandOptions<T> {
   itemSchema: z.ZodType<T>;
   jsonFields?: readonly string[];
+  /** Fields that must stay strings when a CSV cell looks numeric. */
+  stringFields?: readonly string[];
   base?: object;
   chunkSize?: number;
 }
 
 export async function runBulkCommand<T>(
   command: string,
-  args: { dataFile?: string; dataFormat?: DataFormat } & Record<string, unknown>,
+  args: { dataFile?: string; dataFormat?: DataFormat; summary?: boolean } & Record<string, unknown>,
   itemsKey: string,
   options: BulkCommandOptions<T>
 ): Promise<CallToolResult> {
@@ -63,10 +75,11 @@ export async function runBulkCommand<T>(
       itemsKey
     );
     if (loaded.length === 0) throw new Error(`Give ${itemsKey} or a dataFile with at least one item`);
-    const decoded = options.jsonFields ? loaded.map((item) => decodeJsonFields(item, options.jsonFields!)) : loaded;
+    let decoded = options.jsonFields ? loaded.map((item) => decodeJsonFields(item, options.jsonFields!)) : loaded;
+    if (options.stringFields) decoded = decoded.map((item) => stringifyFields(item, options.stringFields!));
     const items = validateItems(decoded, options.itemSchema, itemsKey);
     const outcome = await sendInChunks(command, options.base ?? {}, itemsKey, items, options.chunkSize ?? 300);
-    return formatBulkResult(command, outcome);
+    return formatBulkResult(command, outcome, { summary: args.summary === true });
   } catch (error) {
     return {
       content: [{ type: "text", text: `${command} failed: ${error instanceof Error ? error.message : String(error)}` }],

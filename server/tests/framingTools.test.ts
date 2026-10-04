@@ -82,7 +82,10 @@ describe("create_structural_columns", () => {
     expect(lastCall[1].columns[0]).toEqual({ typeId: 42, x: 180000, y: 0, baseLevel: "Level 1", topLevel: "Level 2" });
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.Response.succeeded).toBe(2000);
-    expect(parsed.Response.results[1999].index).toBe(1999);
+    // 2,000 per-item records exceed the 60 kB limit: the result switches to the summary.
+    expect(parsed.Response).toMatchObject({ summary: true, total: 2000, failures: [] });
+    expect(parsed.Response.results).toBeUndefined();
+    expect(parsed.Response.note).toMatch(/Per-item results omitted/);
   });
 
   it("rejects invalid file items before sending anything", async () => {
