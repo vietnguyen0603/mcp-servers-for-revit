@@ -392,6 +392,16 @@
       "commandName": "get_document_info",
       "description": "Active document title, path, units, active view, levels and open documents",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_structural_columns",
+      "description": "Place structural columns between levels in bulk",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_beams",
+      "description": "Place structural beams on levels in bulk (offsets, justification, usage, joins)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }
