@@ -464,6 +464,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "dimension_elements",
+      "description": "Dimension columns/footings to grids per axis and wall thickness/length in a plan view",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_family",
       "description": "Build a parametric extruded family (rectangular/circular, e.g. barrette or bored pile) from a template, load it and create types",
       "assemblyPath": "RevitMCPCommandSet.dll"

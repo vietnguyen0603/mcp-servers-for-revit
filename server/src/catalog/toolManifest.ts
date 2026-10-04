@@ -129,6 +129,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["line pattern", "line style", "fill pattern", "hatch", "object styles", "line weight", "pen", "standards", "template", "dashed", "hidden"],
   },
+  dimension_elements: {
+    catalogs: ["annotate", "structure"],
+    readOnly: false,
+    keywords: ["dimension", "column dimension", "wall thickness", "shear wall", "core wall", "grid offset", "column layout", "setting out"],
+  },
   create_family: {
     catalogs: ["structure", "architecture"],
     readOnly: false,
