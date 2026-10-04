@@ -1,0 +1,8 @@
+node_modules
+build
+tests
+data
+users.json
+revit-data.db
+*.log
+releases

@@ -1,0 +1,15 @@
+{
+  "users": [
+    {
+      "name": "viet",
+      "token": "replace-with-a-long-random-token-1",
+      "revitHost": "PC-VIET.company.local",
+      "revitPort": 8080
+    },
+    {
+      "name": "employee2",
+      "token": "replace-with-a-long-random-token-2",
+      "revitHost": "192.168.1.52"
+    }
+  ]
+}

@@ -6,8 +6,8 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Database path (stored in project root)
-const DB_PATH = join(__dirname, '..', '..', 'revit-data.db');
+// Database path (REVIT_MCP_DB_PATH, else stored in project root)
+const DB_PATH = process.env.REVIT_MCP_DB_PATH?.trim() || join(__dirname, '..', '..', 'revit-data.db');
 
 // Initialize database connection
 export const db = new Database(DB_PATH);

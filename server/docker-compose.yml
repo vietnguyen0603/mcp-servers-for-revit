@@ -1,0 +1,23 @@
+services:
+  revit-mcp:
+    build: .
+    image: mcp-server-for-revit:latest
+    container_name: revit-mcp
+    restart: unless-stopped
+    # Linux host: share the host network so the server sees each employee's
+    # real IP and can route back to their Revit. (Docker Desktop on Windows/Mac
+    # hides client IPs - there, clients send X-Revit-Host instead.)
+    network_mode: host
+    environment:
+      MCP_HTTP_PORT: 3000
+      # none: route to the caller's own PC; token: per-user tokens from users.json
+      REVIT_MCP_AUTH: none
+      # dynamic: core tools + enable_catalog; all: every tool up front
+      REVIT_MCP_TOOL_MODE: dynamic
+    volumes:
+      # SQLite store shared by all users
+      - ./data:/data
+      # Command set releases for the plugin auto-update (scripts/publish-commandset.ps1)
+      - ./releases:/releases:ro
+      # Token mode only: employee tokens -> Revit PCs (edits picked up without a restart)
+      # - ./users.json:/config/users.json:ro

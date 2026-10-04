@@ -92,6 +92,10 @@ Restart Claude Desktop. When you see the hammer icon, the MCP server is connecte
 
 ![Claude Desktop connection](./assets/claude.png)
 
+**Shared server for a team**
+
+To run one MCP server in Docker on the office network, with each employee's tool calls routed to the Revit on their own PC, see [docs/shared-server-docker.md](docs/shared-server-docker.md).
+
 ## Revit Plugin Setup
 
 If using a release ZIP, the plugin is already included. For manual installation:

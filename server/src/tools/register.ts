@@ -9,6 +9,9 @@ import {
 } from "../catalog/ToolCatalog.js";
 import { registerCatalogTools } from "../catalog/metaTools.js";
 
+// The HTTP server registers the tools once per session; log the list only once
+let loggedRegistration = false;
+
 export async function registerTools(
   server: McpServer,
   options: CatalogOptions = readCatalogOptions()
@@ -49,7 +52,7 @@ export async function registerTools(
 
       if (registerFunctionName) {
         module[registerFunctionName](capturingServer);
-        console.error(`Registered tool: ${file}`);
+        if (!loggedRegistration) console.error(`Registered tool: ${file}`);
       } else {
         console.warn(`Warning: no register function found in file ${file}`);
       }
@@ -63,7 +66,8 @@ export async function registerTools(
   if (options.mode === "dynamic") {
     registerCatalogTools(server, catalog);
   }
-  console.error(`Tool mode: ${options.mode}`);
+  if (!loggedRegistration) console.error(`Tool mode: ${options.mode}`);
+  loggedRegistration = true;
 
   return catalog;
 }
