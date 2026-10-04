@@ -134,3 +134,83 @@ The B6 repair needed a script to take `M_Pile-Spun pile` from the reference mode
   - `overwrite`; `saveToFolder` also writes the families as .rfa files.
 - `load_family`: `folder` (+ `pattern`, `recursive`) loads every .rfa in a folder, skipping backup files; `types` loads only selected types.
 - The client timeout is now per command: `copy_families` and `load_family` wait up to 10 minutes, all other commands still 2 minutes.
+
+## The Nexus Tower 3 test — RC tower from vector PDFs (2026-10-04)
+
+The test modelled the primary structure of THE NEXUS Tower 3 into a blank project. The structure is 5 basements plus 37 floors plus a roof: a PT flat slab with band beams, a shear-wall core, a diaphragm wall, and barrette piles. The source was two vector PDFs, SUB (92 sheets) and SUP (119 sheets).
+
+The geometry was read from the PDF vectors with PyMuPDF and OpenCV. The scripts live outside the repo in `E:\VNguyen\RnD\revit\ai-modeling\nexus_work\py`, and each one handles a different part of the drawings:
+
+- **Grids:** taken from the bubbles.
+- **Walls and columns:** read from the grey cut fill, raster-decomposed into wall centrelines and rotated columns.
+- **Beams:** found from their labels plus a parallel edge pair at the beam width, with the size from the label or the on-sheet schedule.
+- **Slab outlines:** a flood fill of the 0.6 pt edge lines.
+- **Shaft openings:** detected from the dashed "X" diagonals.
+- **Barrettes:** found from parallel 2800 mm edges.
+
+Result: 43 levels, 19 grids, 524 columns, 1278 walls, 1641 beams, 43 slabs, 1 core raft cap, 11 caps and 30 barrettes. No create call failed.
+
+| Step | What was needed | Tool used | Result | Gap |
+|---|---|---|---|---|
+| Walls | 1278 RC walls per storey, base/top level by name, 14 thicknesses | `send_code_to_revit` reading a CSV (Wall.Create, height type = top level) | ok | **S24 `create_walls`**: bulk walls from a dataFile with baseLevel/topLevel names, offsets, thickness → type, structural, location line. `create_line_based_element` only takes numeric elevations and has no dataFile |
+| Beam types | 71 `B-WxH` concrete types | `send_code_to_revit` (duplicate + b/h) | ok | `create_family_type` works but has no dataFile; 71 items had to be pasted. **S25** dataFile on `create_family_type` |
+| Barrettes | Rectangular 1200/1500×2800 piles, 70/78 m | `M_Footing-Rectangular` types with `Foundation Thickness` = pile length, placed as `isolated`, topOffset −3000 | ok, geometry right | **S26** rectangular barrette pile family / `kind:'pile'` with section B×L and rotation |
+| Large results | create_* over 500 items returned 70–200 kB JSON, more than the client limit | — | read back from the saved file | **S27** `summary:true` on bulk create tools (counts + failures only) |
+| Core walls | Wall pieces overlap at L/C corners (centrelines extended to the other wall's axis) | — | acceptable, Revit joins | — |
+
+### Tools added for the Nexus gaps (branch feat/modeling-gaps-2, not yet tested in live Revit)
+
+| Gap | Tool | Notes |
+|---|---|---|
+| Reading drawings | `pdf_extract` (server-side, read-only) | Grid calibration from bubbles, text, cut fills → columns and wall centrelines, beams from labels and schedules, slab outline and X openings, rectangles (barrettes) |
+| S24 walls | `create_walls` | Bulk with dataFile, base/top level by name, offsets, thickness → type, location line, independent bottom (diaphragm walls) |
+| S25 types | `create_family_type` + dataFile | Through the shared bulk runner |
+| S27 large results | `summary` on every bulk tool, auto-summary over 60 kB | Totals, failures, warning counts, id ranges |
+| Typical floors | `copy_to_levels` | Paste Aligned to Selected Levels with re-hosting (level and offsets kept) |
+| Re-runs | `delete_elements` | Filter by category, level, comments, mark or type; dryRun by default |
+| S19 worksets | `set_workset` | List, create, move filtered elements, enable worksharing |
+| Shafts and openings | `create_openings` | Shafts between levels, wall openings, floor openings |
+| PT zones and drop panels | `create_slabs` `zones` / `dropPanels` | Zones cut from the main slab with their own thickness/offset; drop panels hang under the soffit |
+| Stairs | `create_stairs` | Straight or U-shaped component stairs |
+| Joins | `join_elements` | Bulk join with cut order (columns cut beams/slabs, walls cut beams …) |
+| QA | `check_model` | Counts, elevations per type, overlaps/clashes, unsupported beams/columns, levels without floor |
+| S1 | `save_document`, `open_document` | Save/Save As; open, detach, or new project from a template |
+| S26 barrettes | `create_family` | See below |
+
+**S26: parametric families when none exists (`create_family`).** It builds an extruded family from `Metric Structural Foundation.rft` (or Generic Model):
+
+- The plan profile is rectangular (Width × Length) or circular (Diameter).
+- The side faces are locked to reference planes, which are driven by labelled dimensions and EQ constraints about the centre planes.
+- `Depth` drives the extrusion end; it is a type parameter, or an instance parameter for piles whose length varies.
+- The insertion point is the pile top, and the extrusion runs down from it.
+- A flex test runs before saving.
+- The `.rfa` is saved to a library folder and loaded, and the types are created.
+- `create_foundations kind:'pile'` now accepts `rotationDeg` and `lengthParameter`. It looks for `Depth` before `Length`, so a barrette's plan Length is never taken as the pile length.
+
+The research route was the Family API: `NewFamilyDocument` → `FamilyManager.AddParameter` → `NewReferencePlane` / `NewExtrusion` → `NewAlignment` locks → labelled `NewDimension` / `NewDiameterDimension` → `AssociateElementParameterToFamilyParameter(EXTRUSION_END_PARAM)`. The rejected alternatives:
+
+- **DirectShape:** cannot be scheduled as typed families.
+- **Abusing `M_Footing-Rectangular`:** only works for rectangles, and `Foundation Thickness` = pile length is misleading in schedules.
+
+The first live prototype run crashed Revit, so the tool must be verified step by step before relying on it.
+
+### Live retest in Revit 2025 (2026-10-04, model `Nexus_T3_MCP.rvt`)
+
+The tower was rebuilt with the new tools. It has 43 levels, 524 columns, 1278 walls, 1641 beams, 43 slabs, 12 caps and 30 barrettes, and it was saved through `save_document`. The typical floors L6–18 and L24–35 came from `copy_to_levels` (847 elements), and `check_model` confirmed 1641 beams with every copy at its level.
+
+| Tool | Result |
+|---|---|
+| save_document, create_walls, create_family_type (dataFile), bulk `summary`, create_openings (shaft), create_stairs (U), check_model, set_workset (list) | Passed first time |
+| copy_to_levels, delete_elements, set_workset | **Bug fixed:** `Enum.IsDefined(typeof(BuiltInCategory), (int)value)` throws in 2024+ (the enum is Int64); cast to the enum instead |
+| create_family (circular) | **Bug fixed:** the diameter dimension on the solid edge did not drive; the dimension now references the sketch arc (flex 1500 ✓) |
+| create_family (material) | **Bug fixed:** associating Structural Material failed until its value was a real material; it is now set to Concrete first, inside a sub-transaction |
+| join_elements | **Extended:** `cutType`/`byType` filters enforce the cut order for same-category pairs. Revit auto-joins the raft and the core cap with the raft cutting, which left the cap top at −18500. Full tower: 9506 pairs tested, 1285 joined, 1000 switched, 0 failed, 28 s |
+| create_foundations kind:'pile' | `MCP_Pile-Barrette` with rotationDeg and a cap underside. Length comes from `Depth`, so the plan `Length` is never mistaken for the pile length |
+| plugin | The ribbon switch was disabled on the start page; an `AlwaysAvailable` availability class is added (deploy pending) |
+
+Known minor issues:
+
+- **copy_to_levels:** `extraCopies` is reported for beams whose geometry Revit trimmed; the copies themselves are correct.
+- **Openings:** cannot take a Mark.
+- **Summary ids:** ranges do not compress ids that step by 2.
+- **check_model:** reported 18 duplicate-like wall overlaps and 213 beam ends short of supports. These are errors in the extraction data, now easy to find.
