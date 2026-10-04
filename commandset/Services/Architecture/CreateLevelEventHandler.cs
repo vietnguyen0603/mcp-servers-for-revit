@@ -113,9 +113,27 @@ namespace RevitMCPCommandSet.Services.Architecture
                                     buildingStoryParam.Set(levelInfo.IsBuildingStory ? 1 : 0);
                                 }
 
+                                // Resolve which plan views to create: planViews overrides the two flags
+                                bool createFloor = levelInfo.CreateFloorPlan;
+                                bool createCeiling = levelInfo.CreateCeilingPlan;
+                                bool createStructural = false;
+                                if (!string.IsNullOrWhiteSpace(levelInfo.PlanViews))
+                                {
+                                    switch (levelInfo.PlanViews.Trim().ToLowerInvariant())
+                                    {
+                                        case "floor": createFloor = true; createStructural = false; break;
+                                        case "structural": createFloor = false; createStructural = true; break;
+                                        case "both": createFloor = true; createStructural = true; break;
+                                        case "none": createFloor = false; createStructural = false; break;
+                                        default:
+                                            throw new ArgumentException($"planViews must be floor, structural, both or none (got '{levelInfo.PlanViews}').");
+                                    }
+                                    createCeiling = false;
+                                }
+
                                 // Create floor plan view if requested
                                 string floorPlanViewName = null;
-                                if (levelInfo.CreateFloorPlan)
+                                if (createFloor)
                                 {
                                     var floorPlanType = new FilteredElementCollector(_doc)
                                         .OfClass(typeof(ViewFamilyType))
@@ -138,7 +156,7 @@ namespace RevitMCPCommandSet.Services.Architecture
 
                                 // Create ceiling plan view if requested
                                 string ceilingPlanViewName = null;
-                                if (levelInfo.CreateCeilingPlan)
+                                if (createCeiling)
                                 {
                                     var ceilingPlanType = new FilteredElementCollector(_doc)
                                         .OfClass(typeof(ViewFamilyType))
@@ -159,6 +177,29 @@ namespace RevitMCPCommandSet.Services.Architecture
                                     }
                                 }
 
+                                // Create structural plan view if requested
+                                string structuralPlanViewName = null;
+                                if (createStructural)
+                                {
+                                    var structuralPlanType = new FilteredElementCollector(_doc)
+                                        .OfClass(typeof(ViewFamilyType))
+                                        .Cast<ViewFamilyType>()
+                                        .FirstOrDefault(vft => vft.ViewFamily == ViewFamily.StructuralPlan);
+
+                                    if (structuralPlanType != null)
+                                    {
+                                        var structuralPlanView = ViewPlan.Create(_doc, structuralPlanType.Id, newLevel.Id);
+                                        if (structuralPlanView != null)
+                                        {
+                                            structuralPlanViewName = structuralPlanView.Name;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        warnings.Add($"Could not find Structural Plan view family type for level '{levelInfo.Name}'");
+                                    }
+                                }
+
                                 tx.Commit();
 
                                 // Add to existing names set
@@ -172,6 +213,7 @@ namespace RevitMCPCommandSet.Services.Architecture
                                     Elevation = levelInfo.Elevation,
                                     FloorPlanViewName = floorPlanViewName,
                                     CeilingPlanViewName = ceilingPlanViewName,
+                                    StructuralPlanViewName = structuralPlanViewName,
                                     AlreadyExisted = false
                                 });
                             }
@@ -263,6 +305,7 @@ namespace RevitMCPCommandSet.Services.Architecture
         public double Elevation { get; set; }
         public string FloorPlanViewName { get; set; }
         public string CeilingPlanViewName { get; set; }
+        public string StructuralPlanViewName { get; set; }
         public bool AlreadyExisted { get; set; }
     }
 }

@@ -92,4 +92,12 @@ public class LevelInfo
     /// </summary>
     [JsonProperty("createCeilingPlan")]
     public bool CreateCeilingPlan { get; set; } = true;
+
+    /// <summary>
+    ///     Optional plan views to create: "floor", "structural", "both" (floor +
+    ///     structural) or "none". When given it overrides CreateFloorPlan and
+    ///     CreateCeilingPlan; when null the two flags apply (default behaviour).
+    /// </summary>
+    [JsonProperty("planViews")]
+    public string PlanViews { get; set; }
 }

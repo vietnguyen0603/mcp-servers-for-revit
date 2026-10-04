@@ -5,7 +5,7 @@ import { withRevitConnection } from "../utils/ConnectionManager.js";
 export function registerCreateLevelTool(server: McpServer) {
   server.tool(
     "create_level",
-    "Create one or more levels in Revit at specified elevations. Levels define horizontal planes in the building and are used to host floor plans, ceilings, and other level-based elements. All elevation units are in millimeters (mm).",
+    "Create one or more levels in Revit at specified elevations. Levels define horizontal planes in the building and are used to host floor plans, ceilings, and other level-based elements. All elevation units are in millimeters (mm). Use planViews:'structural' (or 'both') to get structural plans for a structural model. Existing level names are reported, not duplicated; use modify_levels to rename or move levels.",
     {
       data: z
         .array(
@@ -52,6 +52,12 @@ export function registerCreateLevelTool(server: McpServer) {
               .boolean()
               .default(true)
               .describe("Whether to create a ceiling plan view for this level (default: true)"),
+            planViews: z
+              .enum(["floor", "structural", "both", "none"])
+              .optional()
+              .describe(
+                "Plan views to create; overrides createFloorPlan/createCeilingPlan when given: 'floor' = floor plan, 'structural' = structural plan, 'both' = floor + structural plan, 'none' = no views. Omit to keep the default (floor + ceiling plan)"
+              ),
           })
         )
         .describe("Array of levels to create"),

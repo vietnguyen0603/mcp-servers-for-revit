@@ -146,6 +146,7 @@ Configure the behaviour with environment variables on the MCP server:
 | Tool | Catalog | Description |
 | ---- | ------- | ----------- |
 | `get_current_view_info` | core | Get current active view info |
+| `get_document_info` | core | Active document title, path, saved state, units, active view, levels and open documents |
 | `get_current_view_elements` | core | Get elements from the current active view |
 | `get_available_family_types` | core | Get available family types in current project |
 | `get_selected_elements` | core | Get currently selected elements |
@@ -157,6 +158,8 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_surface_based_element` | architecture, structure | Create surface-based elements (floor, ceiling, roof) |
 | `create_grid` | architecture, structure | Create a grid system with smart spacing generation |
 | `create_level` | architecture, structure | Create levels at specified elevations |
+| `create_grids` | structure, architecture | Create named grids from lines, arcs or an irregular axes table |
+| `modify_levels` | structure, architecture | Rename/move levels, set Building Story, add missing structural/floor plans |
 | `create_room` | architecture | Create and place rooms at specified locations |
 | `create_dimensions` | annotate | Create dimension annotations in the current view |
 | `create_structural_framing_system` | structure | Create a structural beam framing system |
