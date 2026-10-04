@@ -63,6 +63,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["load", "family", "rfa", "library", "pile cap", "column family", "beam family"],
   },
+  copy_families: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["copy", "transfer", "family", "families", "type", "reference model", "template", "library", "rfa", "system type", "floor type"],
+  },
   create_slabs: {
     catalogs: ["structure", "architecture"],
     readOnly: false,

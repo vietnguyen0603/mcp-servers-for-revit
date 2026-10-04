@@ -32,10 +32,12 @@ interface RevitResult {
  * results whose items all failed are errors too; partial failures get a
  * WARNING line (see batchOutcome.ts).
  */
-export async function sendDocumentationCommand(command: string, params: unknown) {
+export async function sendDocumentationCommand(command: string, params: unknown, timeoutMs?: number) {
   try {
     const response = await withRevitConnection(async (revitClient) => {
-      return await revitClient.sendCommand(command, params);
+      return timeoutMs === undefined
+        ? await revitClient.sendCommand(command, params)
+        : await revitClient.sendCommand(command, params, timeoutMs);
     });
     const result = response as RevitResult | null;
     const failed = result?.success === false || result?.Success === false;

@@ -7,6 +7,7 @@ vi.mock("../src/utils/ConnectionManager.js", async () =>
 import { TOOL_MANIFEST } from "../src/catalog/toolManifest.js";
 import { registerCreateFamilyTypeTool } from "../src/tools/create_family_type.js";
 import { registerLoadFamilyTool } from "../src/tools/load_family.js";
+import { registerCopyFamiliesTool } from "../src/tools/copy_families.js";
 import { registerCreateSurfaceBasedElementTool } from "../src/tools/create_surface_based_element.js";
 import { registerCreateLineBasedElementTool } from "../src/tools/create_line_based_element.js";
 import { resetConnectionMock, sendCommand } from "./helpers/connectionMock.js";
@@ -16,6 +17,7 @@ function setup() {
   const { server, getTool } = createFakeMcpServer();
   registerCreateFamilyTypeTool(server);
   registerLoadFamilyTool(server);
+  registerCopyFamiliesTool(server);
   registerCreateSurfaceBasedElementTool(server);
   registerCreateLineBasedElementTool(server);
   return getTool;
@@ -48,8 +50,26 @@ describe("structural type tools", () => {
   it("forwards load_family by name, path and search", async () => {
     const tool = setup()("load_family");
     await tool.invoke({ families: [{ name: "M_Pile Cap-4 Pile" }], searchOnly: true });
-    expect(sendCommand).toHaveBeenCalledWith("load_family", { families: [{ name: "M_Pile Cap-4 Pile" }], searchOnly: true });
+    expect(sendCommand).toHaveBeenCalledWith("load_family", { families: [{ name: "M_Pile Cap-4 Pile" }], searchOnly: true }, 600000);
     expect(() => tool.parse({ families: [{}] })).toThrow();
+    expect(() => tool.parse({ families: [{ folder: "C:/Lib", pattern: "M_Pile*", recursive: true }] })).not.toThrow();
+    expect(() => tool.parse({ families: [{ path: "C:/a.rfa", types: ["D500"] }] })).not.toThrow();
+    expect(() => tool.parse({ families: [{ path: "C:/a.rfa", folder: "C:/Lib" }] })).toThrow();
+  });
+
+  it("forwards copy_families with a long timeout and validates the source", async () => {
+    const tool = setup()("copy_families");
+    const args = { sourcePath: "E:/ref.rvt", families: ["M_Pile-Spun pile", { name: "M_Footing*", category: "OST_StructuralFoundation" }], systemTypes: [{ name: "AC_S-*", category: "OST_Floors" }] };
+    await tool.invoke(args);
+    expect(sendCommand).toHaveBeenCalledWith("copy_families", args, 600000);
+
+    sendCommand.mockClear();
+    const both = await tool.invoke({ sourcePath: "E:/ref.rvt", sourceDocument: "Ref", listOnly: true });
+    expect(both.isError).toBe(true);
+    const nothing = await tool.invoke({ sourceDocument: "Ref" });
+    expect(nothing.isError).toBe(true);
+    expect(sendCommand).not.toHaveBeenCalled();
+    expect(TOOL_MANIFEST.copy_families.catalogs).toContain("structure");
   });
 
   it("accepts structural on floors and walls", () => {

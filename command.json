@@ -375,7 +375,12 @@
     },
     {
       "commandName": "load_family",
-      "description": "Load .rfa families by path or library search",
+      "description": "Load .rfa families by path, library search or folder (selected types optional)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "copy_families",
+      "description": "Copy families and system types from another open project or .rvt file",
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {

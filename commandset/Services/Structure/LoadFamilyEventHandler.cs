@@ -34,7 +34,8 @@ namespace RevitMCPCommandSet.Services.Structure
             }
 
             var overwrite = parameters.Value<bool?>("overwrite") ?? false;
-            var results = DocumentationUtils.RunBatch(doc, "MCP: Load Families", items, item => Load(doc, (JObject)item, roots, overwrite));
+            var expanded = ExpandFolders(items);
+            var results = DocumentationUtils.RunBatch(doc, "MCP: Load Families", expanded, item => Load(doc, (JObject)item, roots, overwrite));
             return Ok($"Loaded {results.Count(r => r.Value<bool>("success"))} of {results.Count} families.",
                 DocumentationUtils.Summarize(results));
         }
@@ -67,7 +68,33 @@ namespace RevitMCPCommandSet.Services.Structure
 
             Family family;
             bool loaded;
-            if (already != null && !overwrite)
+            var typeNames = (item["types"] as JArray)?.Values<string>().Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            var loadedTypes = new List<string>();
+            if (typeNames != null && typeNames.Count > 0)
+            {
+                // Selected types only (large type catalogs); adds missing types to an already loaded family.
+                var missing = new List<string>();
+                foreach (var typeName in typeNames)
+                {
+                    var exists = already != null && already.GetFamilySymbolIds().Any(id =>
+                        string.Equals(doc.GetElement(id)?.Name, typeName, StringComparison.OrdinalIgnoreCase));
+                    if (exists && !overwrite)
+                        continue;
+                    if (doc.LoadFamilySymbol(path, typeName, new OverwriteOptions(overwrite), out FamilySymbol symbol) || symbol != null)
+                        loadedTypes.Add(typeName);
+                    else if (!exists)
+                        missing.Add(typeName);
+                }
+                if (missing.Count > 0 && loadedTypes.Count == 0)
+                    throw new ArgumentException($"Types not found in '{familyName}': {string.Join(", ", missing)}. Check names with load_family searchOnly or load the whole family.");
+                family = new FilteredElementCollector(doc).OfClass(typeof(Family)).Cast<Family>()
+                             .FirstOrDefault(f => string.Equals(f.Name, familyName, StringComparison.OrdinalIgnoreCase))
+                         ?? throw new InvalidOperationException($"Revit did not load '{path}'.");
+                loaded = loadedTypes.Count > 0;
+                if (missing.Count > 0)
+                    loadedTypes.Add("not found: " + string.Join(", ", missing));
+            }
+            else if (already != null && !overwrite)
             {
                 family = already;
                 loaded = false;
@@ -91,9 +118,41 @@ namespace RevitMCPCommandSet.Services.Structure
                 path,
                 loaded,
                 alreadyInProject = already != null,
+                loadedTypes = loadedTypes.Count > 0 ? loadedTypes : null,
                 typeCount = types.Count,
                 types = types.Take(100)
             };
+        }
+
+        /// <summary>Replaces {folder, pattern?, recursive?} items with one {path, types?} item per matching .rfa file.</summary>
+        private static JArray ExpandFolders(JArray items)
+        {
+            var expanded = new JArray();
+            foreach (var token in items)
+            {
+                var folder = token.Value<string>("folder");
+                if (string.IsNullOrWhiteSpace(folder))
+                {
+                    expanded.Add(token);
+                    continue;
+                }
+                if (!System.IO.Directory.Exists(folder))
+                    throw new ArgumentException($"Folder not found: {folder}");
+                var pattern = token.Value<string>("pattern");
+                if (string.IsNullOrWhiteSpace(pattern)) pattern = "*.rfa";
+                else if (!pattern.EndsWith(".rfa", StringComparison.OrdinalIgnoreCase)) pattern += ".rfa";
+                var option = token.Value<bool?>("recursive") == true ? System.IO.SearchOption.AllDirectories : System.IO.SearchOption.TopDirectoryOnly;
+                var files = System.IO.Directory.GetFiles(folder, pattern, option)
+                    .Where(f => !System.Text.RegularExpressions.Regex.IsMatch(f, @"\.\d{4}\.rfa$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    .OrderBy(f => f).ToList();
+                if (files.Count == 0)
+                    throw new ArgumentException($"No .rfa files matching '{pattern}' in {folder}.");
+                foreach (var file in files)
+                    expanded.Add(new JObject { ["path"] = file });
+            }
+            if (expanded.Count > 300)
+                throw new ArgumentException($"{expanded.Count} families to load; narrow the folder pattern (max 300 per call).");
+            return expanded;
         }
 
         private static List<string> LibraryRoots(Document doc, JObject parameters)
@@ -145,7 +204,7 @@ namespace RevitMCPCommandSet.Services.Structure
             }
         }
 
-        private class OverwriteOptions : IFamilyLoadOptions
+        internal class OverwriteOptions : IFamilyLoadOptions
         {
             private readonly bool _overwrite;
 
