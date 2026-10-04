@@ -78,6 +78,17 @@ describe("flagBatchFailures", () => {
     expect(text(result)).toMatch(/^ERROR: all 2 of 2/);
   });
 
+  it("recognises bulk summaries (counts without per-item results)", () => {
+    const summary = {
+      Success: true,
+      Message: "create_beams: 1 of 2 items succeeded.",
+      Response: { succeeded: 1, failed: 1, total: 2, summary: true, failures: [{ message: "x", count: 1, indexes: "1" }] },
+    };
+    const result = flagBatchFailures({ content: [{ type: "text", text: JSON.stringify(summary) }] });
+    expect(result.isError).toBeUndefined();
+    expect(text(result)).toMatch(/^WARNING: 1 of 2/);
+  });
+
   it("is idempotent and ignores non-JSON text", () => {
     const once = flagBatchFailures({ content: [{ type: "text", text: JSON.stringify(revitResult(1, 1)) }] });
     expect(flagBatchFailures(once)).toEqual(once);

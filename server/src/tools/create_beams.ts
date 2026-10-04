@@ -47,6 +47,7 @@ export function registerCreateBeamsTool(server: McpServer) {
         items: args.beams,
         dataFile: args.dataFile,
         dataFormat: args.dataFormat,
+        summary: args.summary,
       })
   );
 }

@@ -182,6 +182,160 @@ namespace RevitMCPCommandSet.Services.Foundations
             return parameter != null ? ToMm(parameter.AsDouble()) : 0;
         }
 
+        // ---- 2D polygon checks for slab zones / drop panels (feet, XY only) ----
+
+        /// <summary>The loop as a plan polygon (arcs tessellated; no repeated closing point).</summary>
+        internal static List<UV> Polygon2D(CurveLoop loop)
+        {
+            var points = new List<UV>();
+            foreach (var curve in loop)
+            {
+                var tessellated = curve.Tessellate();
+                for (var i = 0; i < tessellated.Count - 1; i++)
+                    points.Add(new UV(tessellated[i].X, tessellated[i].Y));
+            }
+            return points;
+        }
+
+        /// <summary>Even-odd ray cast; points on the boundary may go either way.</summary>
+        internal static bool PointInPolygon(UV p, IList<UV> polygon)
+        {
+            var inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var a = polygon[i];
+                var b = polygon[j];
+                if ((a.V > p.V) != (b.V > p.V) &&
+                    p.U < (b.U - a.U) * (p.V - a.V) / (b.V - a.V) + a.U)
+                    inside = !inside;
+            }
+            return inside;
+        }
+
+        private static double Cross(UV o, UV a, UV b) => (a.U - o.U) * (b.V - o.V) - (a.V - o.V) * (b.U - o.U);
+
+        private static double PointSegmentDistance(UV p, UV a, UV b)
+        {
+            var dx = b.U - a.U;
+            var dy = b.V - a.V;
+            var lengthSquared = dx * dx + dy * dy;
+            var t = lengthSquared < 1e-18 ? 0 : Math.Max(0, Math.Min(1, ((p.U - a.U) * dx + (p.V - a.V) * dy) / lengthSquared));
+            var x = a.U + t * dx - p.U;
+            var y = a.V + t * dy - p.V;
+            return Math.Sqrt(x * x + y * y);
+        }
+
+        private static double SegmentDistance(UV a1, UV a2, UV b1, UV b2)
+        {
+            var d1 = Cross(a1, a2, b1);
+            var d2 = Cross(a1, a2, b2);
+            var d3 = Cross(b1, b2, a1);
+            var d4 = Cross(b1, b2, a2);
+            if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)))
+                return 0;
+            return Math.Min(Math.Min(PointSegmentDistance(a1, b1, b2), PointSegmentDistance(a2, b1, b2)),
+                Math.Min(PointSegmentDistance(b1, a1, a2), PointSegmentDistance(b2, a1, a2)));
+        }
+
+        /// <summary>Smallest plan distance between the two polygon boundaries (0 when they cross).</summary>
+        internal static double BoundaryDistance(IList<UV> a, IList<UV> b)
+        {
+            var best = double.MaxValue;
+            for (var i = 0; i < a.Count; i++)
+            {
+                var a1 = a[i];
+                var a2 = a[(i + 1) % a.Count];
+                for (var j = 0; j < b.Count; j++)
+                {
+                    best = Math.Min(best, SegmentDistance(a1, a2, b[j], b[(j + 1) % b.Count]));
+                    if (best <= 0) return 0;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>True when the polygons share any area or their boundaries touch (within 1 mm).</summary>
+        internal static bool PolygonsOverlap(IList<UV> a, IList<UV> b)
+        {
+            return BoundaryDistance(a, b) < LevelTolerance || PointInPolygon(a[0], b) || PointInPolygon(b[0], a);
+        }
+
+        private static bool InsideOrOn(UV p, IList<UV> polygon)
+        {
+            if (PointInPolygon(p, polygon)) return true;
+            for (var j = 0; j < polygon.Count; j++)
+            {
+                if (PointSegmentDistance(p, polygon[j], polygon[(j + 1) % polygon.Count]) < LevelTolerance)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>True when every vertex and edge midpoint of <paramref name="inner" /> is inside or on <paramref name="outer" />.</summary>
+        internal static bool PolygonWithin(IList<UV> inner, IList<UV> outer)
+        {
+            for (var i = 0; i < inner.Count; i++)
+            {
+                var a = inner[i];
+                var b = inner[(i + 1) % inner.Count];
+                if (!InsideOrOn(a, outer) || !InsideOrOn(new UV((a.U + b.U) / 2, (a.V + b.V) / 2), outer))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        ///     Null when <paramref name="inner" /> lies strictly inside <paramref name="outer" /> (no touching) and clear
+        ///     of every polygon in <paramref name="others" />; else the reason.
+        /// </summary>
+        internal static string InnerLoopProblem(IList<UV> inner, IList<UV> outer, IEnumerable<KeyValuePair<string, List<UV>>> others)
+        {
+            if (BoundaryDistance(inner, outer) < LevelTolerance)
+                return "it touches or crosses the slab boundary (split the slab boundary for edge zones)";
+            if (!PointInPolygon(inner[0], outer))
+                return "it is outside the slab boundary";
+            foreach (var other in others)
+            {
+                if (PolygonsOverlap(inner, other.Value))
+                    return $"it overlaps or touches {other.Key}";
+            }
+            return null;
+        }
+
+        internal static UV Centroid(IList<UV> polygon)
+        {
+            double area = 0, cx = 0, cy = 0;
+            for (var i = 0; i < polygon.Count; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Count];
+                var cross = a.U * b.V - b.U * a.V;
+                area += cross;
+                cx += (a.U + b.U) * cross;
+                cy += (a.V + b.V) * cross;
+            }
+            if (Math.Abs(area) < 1e-12)
+                return new UV(polygon.Average(p => p.U), polygon.Average(p => p.V));
+            return new UV(cx / (3 * area), cy / (3 * area));
+        }
+
+        internal static double TypeThicknessFeet(FloorType type)
+        {
+            var width = type.GetCompoundStructure()?.GetWidth();
+            if (width.HasValue) return width.Value;
+            return type.get_Parameter(BuiltInParameter.FLOOR_ATTR_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0;
+        }
+
+        /// <summary>Sets the floor's height offset from level (top of slab), warning when it cannot.</summary>
+        internal static void SetSlabOffset(Floor floor, double offsetFeet, List<string> warnings, string what = "slab")
+        {
+            var parameter = floor.get_Parameter(BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM);
+            if (parameter != null && !parameter.IsReadOnly)
+                parameter.Set(offsetFeet);
+            else if (Math.Abs(offsetFeet) > 1e-9)
+                warnings.Add($"Could not set the height offset from level of the {what}.");
+        }
+
         /// <summary>
         ///     Floor type from typeId, typeName, or thickness (find or create "Slab &lt;t&gt;mm" /
         ///     "Foundation Slab &lt;t&gt;mm" by duplicating the simplest type and resizing its core),

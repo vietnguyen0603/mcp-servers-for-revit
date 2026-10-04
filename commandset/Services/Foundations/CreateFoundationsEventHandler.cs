@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Autodesk.Revit.DB.Structure;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
@@ -132,12 +132,20 @@ namespace RevitMCPCommandSet.Services.Foundations
                 instance = doc.Create.NewFamilyInstance(new XYZ(x, y, 0), symbol, level, StructuralType.Footing)
                            ?? throw new InvalidOperationException("Revit did not place the pile.");
                 SetLevelOffset(instance, top - level.Elevation, warnings);
-                SetPileLength(instance, symbol, length, warnings);
+                SetPileLength(instance, symbol, length, item.Value<string>("lengthParameter"), warnings);
                 placedAs = "foundation";
             }
             else
             {
                 throw new ArgumentException($"'{symbol.FamilyName}' is in category '{symbol.Category?.Name}'; piles need a Structural Column or Structural Foundation family.");
+            }
+
+            var pileRotation = item.Value<double?>("rotationDeg") ?? 0;
+            if (Math.Abs(pileRotation) > 1e-9)
+            {
+                var axisOrigin = new XYZ(x, y, level.Elevation);
+                ElementTransformUtils.RotateElement(doc, instance.Id, Line.CreateBound(axisOrigin, axisOrigin + XYZ.BasisZ),
+                    pileRotation * Math.PI / 180);
             }
 
             FoundationModelUtils.SetMark(ctx, instance, item, warnings);
@@ -328,9 +336,14 @@ namespace RevitMCPCommandSet.Services.Foundations
         }
 
         /// <summary>Foundation-family piles: set an instance length parameter, else check the type's length.</summary>
-        private static void SetPileLength(FamilyInstance instance, FamilySymbol symbol, double length, List<string> warnings)
+        private static void SetPileLength(FamilyInstance instance, FamilySymbol symbol, double length, string lengthParameter,
+            List<string> warnings)
         {
-            foreach (var name in new[] { "Length", "Pile Length", "Depth", "L" })
+            // "Depth" before "Length": barrette families (create_family) use Width x Length for the plan section.
+            var names = string.IsNullOrWhiteSpace(lengthParameter)
+                ? new[] { "Pile Length", "Depth", "Length", "L" }
+                : new[] { lengthParameter };
+            foreach (var name in names)
             {
                 var parameter = instance.LookupParameter(name);
                 if (parameter != null && !parameter.IsReadOnly && parameter.StorageType == StorageType.Double)
@@ -338,7 +351,7 @@ namespace RevitMCPCommandSet.Services.Foundations
                     if (parameter.Set(length)) return;
                 }
             }
-            foreach (var name in new[] { "Length", "Pile Length", "Depth", "L" })
+            foreach (var name in names)
             {
                 var parameter = symbol.LookupParameter(name);
                 if (parameter != null && parameter.StorageType == StorageType.Double)

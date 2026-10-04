@@ -36,6 +36,13 @@ const pileSchema = z
       .optional()
       .describe("Pile top = underside of the structural foundation with this Mark (may be created earlier in the same call)"),
     length: z.number().positive().describe("Pile length in mm (spans [top - length, top])"),
+    lengthParameter: z
+      .string()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe("Foundation families: parameter holding the pile length (default first of 'Pile Length', 'Depth', 'Length', 'L')"),
+    rotationDeg: z.number().finite().optional().describe("Rotation about the pile axis, degrees counter-clockwise (barrettes)"),
     baseLevel: levelRefSchema.optional().describe("Level for the column constraints (default the nearest level at or below the top)"),
     mark: markSchema.optional(),
   })

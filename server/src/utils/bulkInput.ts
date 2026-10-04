@@ -26,12 +26,19 @@ export const bulkInputShape = {
     .enum(["json", "csv", "jsonl"])
     .optional()
     .describe("Format of dataFile (default from the extension: .csv, .jsonl/.ndjson, else json)"),
+  summary: z
+    .boolean()
+    .optional()
+    .describe(
+      "Return only totals, failed items grouped by error (with their indexes), distinct warnings with counts and the created ids as compact ranges - no per-item records. Use for large batches; a result over ~60 kB switches to the summary automatically"
+    ),
 };
 
 export interface BulkInputArgs<T> {
   items?: T[];
   dataFile?: string;
   dataFormat?: DataFormat;
+  summary?: boolean;
 }
 
 export interface BulkOutcome {
@@ -246,15 +253,167 @@ export async function sendInChunks(
   return { succeeded, failed, results };
 }
 
-/** MCP result for a bulk outcome; an error only when nothing succeeded. */
-export function formatBulkResult(command: string, outcome: BulkOutcome): CallToolResult {
-  const total = outcome.succeeded + outcome.failed;
-  const revitResult = {
-    Success: outcome.succeeded > 0 || total === 0,
-    Message: `${command}: ${outcome.succeeded} of ${total} items succeeded.`,
-    Response: outcome,
+/** Full results longer than this (characters) are replaced by the summary. */
+export const MAX_FULL_RESULT_CHARS = 60_000;
+
+const MAX_SUMMARY_GROUPS = 50;
+const MAX_ID_RANGES = 200;
+
+export interface BulkSummary {
+  succeeded: number;
+  failed: number;
+  total: number;
+  summary: true;
+  /** Created element ids in item order: "first-last" runs of consecutive ids, or first/last when there are too many runs. */
+  createdIds: { count: number; ranges?: string; first?: number; last?: number };
+  /** Failed items grouped by message; `indexes` as compact ranges ("0-4, 9"). */
+  failures: Array<{ message: string; count: number; indexes: string }>;
+  /** Distinct warnings with how many items reported each and the first item indexes. */
+  warnings: Array<{ message: string; count: number; indexes: string }>;
+  note?: string;
+}
+
+/** "0-4, 7, 9-10" from integers; consecutive (step 1) runs collapse. Input order is kept. */
+export function compactRanges(values: number[]): string {
+  const parts: string[] = [];
+  let start: number | undefined;
+  let previous: number | undefined;
+  const flush = () => {
+    if (start === undefined || previous === undefined) return;
+    parts.push(start === previous ? `${start}` : `${start}-${previous}`);
   };
-  const text = total > 50 ? JSON.stringify(revitResult) : JSON.stringify(revitResult, null, 2);
+  for (const value of values) {
+    if (previous !== undefined && value === previous + 1) {
+      previous = value;
+      continue;
+    }
+    flush();
+    start = previous = value;
+  }
+  flush();
+  return parts.join(", ");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Element ids a result record reports as created: id, ids[], else typeId (create_family_type). */
+function createdIdsOf(record: Record<string, unknown>): number[] {
+  if (typeof record.id === "number") return [record.id];
+  if (Array.isArray(record.ids)) return record.ids.filter((v): v is number => typeof v === "number");
+  if (typeof record.typeId === "number" && record.id === undefined) return [record.typeId];
+  return [];
+}
+
+function groupList(groups: Map<string, number[]>, label: string) {
+  const list = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([message, indexes]) => ({ message, count: indexes.length, indexes: compactRanges(indexes) }));
+  if (list.length <= MAX_SUMMARY_GROUPS) return list;
+  const rest = list.slice(MAX_SUMMARY_GROUPS);
+  return [
+    ...list.slice(0, MAX_SUMMARY_GROUPS),
+    {
+      message: `... ${rest.length} more distinct ${label}`,
+      count: rest.reduce((sum, g) => sum + g.count, 0),
+      indexes: "",
+    },
+  ];
+}
+
+/** Compact digest of a bulk outcome: no per-item records. */
+export function summarizeBulkOutcome(outcome: BulkOutcome): BulkSummary {
+  const failures = new Map<string, number[]>();
+  const warnings = new Map<string, number[]>();
+  const ids: number[] = [];
+  outcome.results.forEach((result, position) => {
+    if (!isRecord(result)) return;
+    const index = typeof result.index === "number" ? result.index : position;
+    if (result.success === false) {
+      const message = typeof result.message === "string" ? result.message : "Failed";
+      const list = failures.get(message) ?? [];
+      list.push(index);
+      failures.set(message, list);
+      return;
+    }
+    ids.push(...createdIdsOf(result));
+    if (Array.isArray(result.warnings)) {
+      for (const warning of new Set(result.warnings.map((w) => String(w)))) {
+        const list = warnings.get(warning) ?? [];
+        list.push(index);
+        warnings.set(warning, list);
+      }
+    }
+  });
+
+  const ranges = compactRanges(ids);
+  const runCount = ranges === "" ? 0 : ranges.split(", ").length;
+  const createdIds =
+    ids.length === 0
+      ? { count: 0 }
+      : runCount <= MAX_ID_RANGES
+        ? { count: ids.length, ranges }
+        : { count: ids.length, first: ids[0], last: ids[ids.length - 1] };
+
+  const warningGroups = groupList(warnings, "warnings").map((group) => ({
+    ...group,
+    // Keep the index list short for common warnings.
+    indexes: group.indexes.length > 200 ? `${group.indexes.slice(0, 200)}...` : group.indexes,
+  }));
+
+  return {
+    succeeded: outcome.succeeded,
+    failed: outcome.failed,
+    total: outcome.succeeded + outcome.failed,
+    summary: true,
+    createdIds,
+    failures: groupList(failures, "errors"),
+    warnings: warningGroups,
+  };
+}
+
+export interface FormatBulkOptions {
+  /** Return the summary instead of per-item results. */
+  summary?: boolean;
+  /** Switch to the summary when the full text exceeds this many characters (default MAX_FULL_RESULT_CHARS). */
+  maxChars?: number;
+}
+
+/** MCP result for a bulk outcome; an error only when nothing succeeded. */
+export function formatBulkResult(command: string, outcome: BulkOutcome, options: FormatBulkOptions = {}): CallToolResult {
+  const total = outcome.succeeded + outcome.failed;
+  const message = `${command}: ${outcome.succeeded} of ${total} items succeeded.`;
+  const success = outcome.succeeded > 0 || total === 0;
+
+  let text: string | undefined;
+  let note: string | undefined;
+  if (!options.summary) {
+    const full = { Success: success, Message: message, Response: outcome };
+    text = total > 50 ? JSON.stringify(full) : JSON.stringify(full, null, 2);
+    const limit = options.maxChars ?? MAX_FULL_RESULT_CHARS;
+    if (text.length > limit) {
+      note =
+        `Per-item results omitted: the full result is ${Math.round(text.length / 1024)} kB (limit ${Math.round(limit / 1024)} kB). ` +
+        "Use the created id ranges, or re-run smaller batches for per-item records.";
+      text = undefined;
+    }
+  }
+
+  const revitResult = text !== undefined
+    ? { Success: success, Message: message, Response: outcome }
+    : {
+        Success: success,
+        Message: message,
+        Response: note ? { ...summarizeBulkOutcome(outcome), note } : summarizeBulkOutcome(outcome),
+      };
+  const summarized = text === undefined;
+  if (summarized) text = JSON.stringify(revitResult, null, 2);
   // applyBatchOutcome adds the WARNING/ERROR line and sets isError when nothing succeeded.
-  return applyBatchOutcome(revitResult, { content: [{ type: "text" as const, text }] });
+  const result = applyBatchOutcome(revitResult, { content: [{ type: "text" as const, text: text! }] });
+  if (summarized && result.content[0]?.type === "text") {
+    const first = result.content[0] as { type: "text"; text: string };
+    result.content[0] = { ...first, text: first.text.replace("see results[].message", "see failures[]") };
+  }
+  return result;
 }
