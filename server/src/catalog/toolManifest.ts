@@ -48,6 +48,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["floor", "slab", "ceiling", "roof"],
   },
+  create_family_type: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["type", "duplicate", "section", "size", "family type", "steel section", "thickness", "footing size"],
+  },
+  load_family: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["load", "family", "rfa", "library", "pile cap", "column family", "beam family"],
+  },
   create_level: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "elevation", "storey"] },
   create_grid: { catalogs: ["architecture", "structure"], readOnly: false, keywords: ["datum", "axis", "gridline"] },
   create_room: { catalogs: ["architecture"], readOnly: false, keywords: ["space"] },

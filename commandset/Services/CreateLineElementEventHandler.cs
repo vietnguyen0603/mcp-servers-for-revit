@@ -99,13 +99,29 @@ namespace RevitMCPCommandSet.Services
                     switch (builtInCategory)
                     {
                         case BuiltInCategory.OST_Walls:
+                            if (wallType == null && data.Thickness > 0)
+                            {
+                                // No usable typeId: get or create a basic wall type of the requested thickness
+                                using (var typeTransaction = new Transaction(doc, "Create Wall Type"))
+                                {
+                                    typeTransaction.Start();
+                                    wallType = CreateOrGetWallType(doc, data.Thickness / 304.8);
+                                    typeTransaction.Commit();
+                                }
+                                if (requestedTypeId != -1 && requestedTypeId != 0)
+                                    _warnings.Add($"Requested wall typeId {requestedTypeId} not found. Used '{wallType.Name}' for thickness {data.Thickness} mm.");
+                            }
+                            else if (wallType != null && data.Thickness > 0 && Math.Abs(wallType.Width * 304.8 - data.Thickness) > 1)
+                            {
+                                _warnings.Add($"Wall type '{wallType.Name}' is {wallType.Width * 304.8:0} mm; requested thickness {data.Thickness} mm ignored because typeId was given.");
+                            }
                             if (wallType == null)
                             {
-                                // Requested typeId was invalid or not provided, fall back to first available
+                                // No typeId and no thickness: fall back to the first basic wall type
                                 wallType = new FilteredElementCollector(doc)
                                     .OfClass(typeof(WallType))
                                     .Cast<WallType>()
-                                    .FirstOrDefault();
+                                    .FirstOrDefault(w => w.Kind == WallKind.Basic);
                                 if (wallType == null)
                                 {
                                     _warnings.Add($"No wall types available in project.");
@@ -182,10 +198,19 @@ namespace RevitMCPCommandSet.Services
                                   data.Height / 304.8,
                                   baseOffset,
                                   false,
-                                  false
+                                  data.Structural ?? false
                                 );
                                 if (wall != null)
                                 {
+                                    // Attach the top to a level when one sits exactly at the wall top
+                                    double topElevation = (data.BaseLevel + data.BaseOffset + data.Height) / 304.8;
+                                    Level exactTop = new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>()
+                                        .FirstOrDefault(l => Math.Abs(l.Elevation - topElevation) < 1.0 / 304.8);
+                                    if (exactTop != null && exactTop.Id != baseLevel.Id)
+                                    {
+                                        wall.get_Parameter(BuiltInParameter.WALL_HEIGHT_TYPE).Set(exactTop.Id);
+                                        wall.get_Parameter(BuiltInParameter.WALL_TOP_OFFSET).Set(0.0);
+                                    }
                                     elementIds.Add(wall.Id.GetIntValue());
                                 }
                                 break;
@@ -294,7 +319,7 @@ namespace RevitMCPCommandSet.Services
             WallType existingType = new FilteredElementCollector(doc)
                                     .OfClass(typeof(WallType))
                                     .Cast<WallType>()
-                                    .FirstOrDefault(w => w.Name == $"{_wallName}{width * 304.8}mm");
+                                    .FirstOrDefault(w => w.Name == $"{_wallName}{Math.Round(width * 304.8)}mm");
             if (existingType != null)
                 return existingType;
 
@@ -302,13 +327,13 @@ namespace RevitMCPCommandSet.Services
             WallType baseWallType = new FilteredElementCollector(doc)
                                     .OfClass(typeof(WallType))
                                     .Cast<WallType>()
-                                    .FirstOrDefault(w => w.Name.Contains("Generic")); ;
+                                    .FirstOrDefault(w => w.Kind == WallKind.Basic && w.Name.Contains("Generic"));
             if (baseWallType == null)
             {
                 baseWallType = new FilteredElementCollector(doc)
                                     .OfClass(typeof(WallType))
                                     .Cast<WallType>()
-                                    .FirstOrDefault(); ;
+                                    .FirstOrDefault(w => w.Kind == WallKind.Basic);
             }
 
             if (baseWallType == null)
@@ -316,7 +341,7 @@ namespace RevitMCPCommandSet.Services
 
             // Duplicate the wall type
             WallType newWallType = null;
-            newWallType = baseWallType.Duplicate($"{_wallName}{width * 304.8}mm") as WallType;
+            newWallType = baseWallType.Duplicate($"{_wallName}{Math.Round(width * 304.8)}mm") as WallType;
 
             // Set the wall thickness
             CompoundStructure cs = newWallType.GetCompoundStructure();

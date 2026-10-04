@@ -367,6 +367,16 @@
       "commandName": "update_viewports",
       "description": "Renumber, retype, move, anchor and adjust titles of placed viewports",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "create_family_type",
+      "description": "Duplicate a family/system type and set its type parameters (sizes, thickness)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "load_family",
+      "description": "Load .rfa families by path or library search",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

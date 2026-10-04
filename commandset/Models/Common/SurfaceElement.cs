@@ -45,6 +45,12 @@ public class SurfaceElement
     /// <summary>
     ///     Base offset
     /// </summary>
+    /// <summary>
+    ///     Structural flag for floors and walls (default false)
+    /// </summary>
+    [JsonProperty("structural")]
+    public bool? Structural { get; set; }
+
     [JsonProperty("baseOffset")]
     public double BaseOffset { get; set; }
 
