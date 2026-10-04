@@ -16,10 +16,10 @@ function setup() {
 }
 
 const framingPlan = [
-  { action: "create", name: "S-FRAMING PLAN 1:150", viewType: "StructuralPlan", ifExists: "reuse" },
+  { action: "create", name: "S-FRAMING PLAN 1-150", viewType: "StructuralPlan", ifExists: "reuse" },
   {
     action: "modify",
-    templateName: "S-FRAMING PLAN 1:150",
+    templateName: "S-FRAMING PLAN 1-150",
     scale: "1:150",
     detailLevel: "Medium",
     discipline: "Structural",
@@ -38,7 +38,7 @@ const framingPlan = [
     filters: [{ name: "Piles", visible: false }],
     controlled: { exclude: ["View Range"], include: ["V/G Overrides Model", "Filters"] },
   },
-  { action: "apply", templateName: "S-FRAMING PLAN 1:150", viewIds: [101, 102] },
+  { action: "apply", templateName: "S-FRAMING PLAN 1-150", viewIds: [101, 102] },
   { action: "list", nameContains: "S-" },
 ];
 
@@ -99,6 +99,33 @@ describe("manage_view_templates", () => {
       expect(result.content[0].text).toMatch(message);
     }
     expect(withRevitConnection).not.toHaveBeenCalled();
+  });
+
+  it("rejects Revit-prohibited characters in template names before contacting Revit", async () => {
+    const tool = setup();
+    const cases: Array<[unknown[], RegExp]> = [
+      [[{ action: "create", name: "S-PLAN 1:150", viewType: "StructuralPlan" }], /name 'S-PLAN 1:150' contains ':'/],
+      [[{ action: "create", name: "A<B>", viewType: "Section" }], /'<' '>'/],
+      [[{ action: "create", name: "OK", fromTemplate: "Bad|Name" }], /fromTemplate .* contains '\|'/],
+      [[{ action: "modify", templateName: "T[1]", scale: 100 }], /templateName .* contains '\[' '\]'/],
+      [[{ action: "apply", templateName: "T?", viewIds: [1] }], /contains '\?'/],
+    ];
+    for (const [actions, message] of cases) {
+      const result = await tool.invoke({ actions });
+      expect(result.isError, JSON.stringify(actions)).toBe(true);
+      expect(result.content[0].text).toMatch(message);
+      expect(result.content[0].text).toMatch(/cannot contain/);
+    }
+    expect(withRevitConnection).not.toHaveBeenCalled();
+
+    const ok = await tool.invoke({ actions: [{ action: "create", name: "S-FRAMING PLAN 1-150 (S)", viewType: "StructuralPlan" }] });
+    expect(ok.isError).toBeFalsy();
+  });
+
+  it("documents templateKind and the Floors transparency warning", () => {
+    const tool = setup();
+    expect(tool.description).toMatch(/templateKind/);
+    expect(tool.description).toMatch(/reset:true, transparency:0/);
   });
 
   it("flags partial failures from Revit", async () => {

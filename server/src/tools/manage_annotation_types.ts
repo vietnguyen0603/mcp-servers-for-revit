@@ -235,7 +235,7 @@ export function registerManageAnnotationTypesTool(server: McpServer) {
       "grid types {bubble:'M_Grid Head - Circle', bubbleEnd1:true, bubbleEnd2:false, centerSegment:'continuous', endSegmentWeight:3}; spot elevations {units:{unit:'m', accuracy:0.001, plusPrefix:true}}. " +
       "action 'list' (read-only) returns each type with its current values plus choices (arrowhead, grid head, level head, viewport title, spot symbol and line pattern names) - call it first to get exact names. " +
       "create duplicates sourceName (default the first type of the kind) as name; update edits an existing type; setDefault (or setAsDefault:true) makes it the default for new elements. " +
-      "Text sizes and offsets are printed mm. Each type item is all-or-nothing; unknown or inapplicable parameters fail the item and list the type's editable parameter names. One undo step.",
+      "Text sizes and offsets are printed mm. Each type item applies every writable setting; read-only (e.g. interiorTickMark on some dimension types), missing or rejected settings are skipped and listed under skipped/warnings for that item. An item fails only when nothing could be applied (a newly duplicated type is then not kept) or the type could not be created. One undo step.",
     {
       action: z.enum(["list", "create", "update", "setDefault"]).describe("list (read-only), create, update or setDefault"),
       kind: z

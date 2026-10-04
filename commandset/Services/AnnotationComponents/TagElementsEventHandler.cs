@@ -60,6 +60,10 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var tagType = DocumentationUtils.GetElement<FamilySymbol>(doc, DocumentationUtils.ReadId(parameters, "tagTypeId"));
             if (DocumentationUtils.ReadId(parameters, "tagTypeId") != null && tagType == null)
                 return Fail("'tagTypeId' does not refer to a tag family type.");
+            var notes = new List<string>();
+            var tagTypeName = parameters.Value<string>("tagTypeName");
+            if (tagType == null && !string.IsNullOrWhiteSpace(tagTypeName))
+                tagType = ResolveTagType(doc, tagTypeName, notes);
 
             var addLeader = parameters.Value<bool?>("addLeader") ?? false;
             var orientationText = parameters.Value<string>("orientation");
@@ -75,10 +79,21 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var shiftStepMm = parameters.Value<double?>("shiftStepMm");
             var shiftStep = shiftStepMm != null && shiftStepMm > 0 ? DocumentationUtils.MmToFeet(shiftStepMm.Value) : (double?)null;
 
+            var placement = ParsePlacement(parameters.Value<string>("placement"));
+            var scale = Math.Max(1, view.Scale);
+            var gap = DocumentationUtils.MmToFeet((parameters.Value<double?>("offsetPaperMm") ?? 2.0) * scale);
+            var leaderMode = parameters.Value<string>("leader")?.Trim().ToLowerInvariant();
+            if (leaderMode != null && leaderMode != "auto" && leaderMode != "none" && leaderMode != "always")
+                return Fail("leader must be 'auto', 'none' or 'always'.");
+            var leaderThreshold = DocumentationUtils.MmToFeet((parameters.Value<double?>("leaderThresholdPaperMm") ?? 5.0) * scale);
+            // With a placement preset or a leader mode the leader is added after the tag has been positioned.
+            var deferLeader = placement != null || leaderMode != null;
+            var createLeader = !deferLeader && addLeader;
+            var leadersAdded = 0;
+
             if (targets.Count == 0)
                 return Ok("Nothing to tag.", new { viewId = view.Id.GetValue(), created = new object[0], skipped });
 
-            var notes = new List<string>();
             var withoutNormal = 0;
 #if !REVIT2022_OR_GREATER
             if (modelOrientation)
@@ -96,12 +111,14 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 var anchor = AnchorPoint(element, view)
                              ?? throw new InvalidOperationException("Element has no location in this view.");
                 var lineDirection = LinearDirection(element, view);
-                var head = anchor + offset;
+                var extra = offset;
                 if (Math.Abs(normalOffset) > 1e-9)
                 {
-                    if (lineDirection != null) head += Normal(lineDirection, view) * normalOffset;
+                    if (lineDirection != null) extra += Normal(lineDirection, view) * normalOffset;
                     else withoutNormal++;
                 }
+                // Placement presets measure the tag first, so it is created at the anchor and the extra offset is added afterwards.
+                var head = placement == null ? anchor + extra : anchor;
 
                 Element tagElement;
                 if (element is Room room)
@@ -126,7 +143,8 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     if (modelOrientation)
                     {
 #if REVIT2022_OR_GREATER
-                        tagOrientation = TagOrientation.AnyModelDirection;
+                        // With a placement preset the tag is measured horizontal first and rotated in PlaceTag.
+                        tagOrientation = placement == null ? TagOrientation.AnyModelDirection : TagOrientation.Horizontal;
 #else
                         tagOrientation = direction != null && Math.Abs(direction.DotProduct(view.UpDirection)) > Math.Abs(direction.DotProduct(view.RightDirection))
                             ? TagOrientation.Vertical
@@ -136,13 +154,24 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 
                     var reference = new Reference(element);
                     var tag = tagType != null
-                        ? IndependentTag.Create(doc, tagType.Id, view.Id, reference, addLeader, tagOrientation, head)
-                        : IndependentTag.Create(doc, view.Id, reference, addLeader, TagMode.TM_ADDBY_CATEGORY, tagOrientation, head);
+                        ? IndependentTag.Create(doc, tagType.Id, view.Id, reference, createLeader, tagOrientation, head)
+                        : IndependentTag.Create(doc, view.Id, reference, createLeader, TagMode.TM_ADDBY_CATEGORY, tagOrientation, head);
 #if REVIT2022_OR_GREATER
-                    if (modelOrientation && direction != null)
+                    if (modelOrientation && direction != null && placement == null)
                         tag.RotationAngle = ReadableAngle(direction, view);
 #endif
                     tagElement = tag;
+                }
+
+                if (placement != null)
+                {
+                    PlaceTag(doc, view, tagElement, element, anchor, lineDirection,
+                        modelOrientation ? lineDirection ?? PointDirection(element, view) : null, placement, gap);
+                    if (!extra.IsZeroLength())
+                    {
+                        var placedHead = HeadPosition(tagElement);
+                        if (placedHead != null) MoveHead(doc, tagElement, placedHead + extra);
+                    }
                 }
 
                 var result = new JObject
@@ -151,6 +180,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     ["tagId"] = tagElement.Id.GetValue()
                 };
 
+                var headBefore = HeadPosition(tagElement);
                 if (avoidOverlaps)
                 {
                     var placed = AvoidOverlap(doc, view, tagElement, lineDirection, occupied, maxShiftTries, shiftStep, out var rect, out var blocker, out var shifted);
@@ -167,6 +197,20 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                             remainingOverlaps.Add(new { elementId = element.Id.GetValue(), tagId = tagElement.Id.GetValue(), overlapsTagId = blocker });
                     }
                     if (rect != null) occupied.Add(rect);
+                }
+
+                if (deferLeader)
+                {
+                    var headAfter = HeadPosition(tagElement);
+                    var wantLeader = leaderMode == "always"
+                                     || (leaderMode == null && addLeader)
+                                     || (leaderMode == "auto" && headBefore != null && headAfter != null &&
+                                         ViewDistance(headBefore, headAfter, view) > leaderThreshold);
+                    if (wantLeader && SetLeader(tagElement))
+                    {
+                        result["leader"] = true;
+                        leadersAdded++;
+                    }
                 }
 
                 return result;
@@ -187,6 +231,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     var entry = new JObject { ["elementId"] = r["elementId"], ["tagId"] = r["tagId"] };
                     if (r["shifted"] != null) entry["shifted"] = r["shifted"];
                     if (r["overlapsTagId"] != null) entry["overlapsTagId"] = r["overlapsTagId"];
+                    if (r["leader"] != null) entry["leader"] = r["leader"];
                     return entry;
                 })),
                 ["skipped"] = JArray.FromObject(skipped)
@@ -199,8 +244,193 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 response["remainingOverlaps"] = JArray.FromObject(remainingOverlaps);
                 message += $" Shifted {shiftedCount} to avoid overlaps; {remainingCount} still overlap.";
             }
+            if (placement != null) response["placement"] = placement;
+            if (deferLeader) response["leadersAdded"] = leadersAdded;
+            if (tagType != null) response["tagType"] = $"{tagType.FamilyName}: {tagType.Name}";
             if (notes.Count > 0) response["notes"] = new JArray(notes);
             return Ok(message, response);
+        }
+
+        // ---------------------------------------------------------------- placement presets
+
+        private static readonly string[] Placements =
+            { "center", "above", "below", "left", "right", "topRight", "topLeft", "bottomRight", "bottomLeft" };
+
+        private static string ParsePlacement(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            var match = Placements.FirstOrDefault(p => string.Equals(p, text.Trim(), StringComparison.OrdinalIgnoreCase));
+            return match ?? throw new ArgumentException($"placement must be one of {string.Join(", ", Placements)}.");
+        }
+
+        /// <summary>
+        ///     Moves a freshly created tag so its box lands at the preset position: linear elements
+        ///     (center / above / below) centred on the element and offset along its in-view normal by
+        ///     half the element width + gap + half the tag; otherwise relative to the element's box in
+        ///     the view (gap in model units = offsetPaperMm x view scale). Model-oriented tags are
+        ///     measured horizontal first, then rotated to the element direction.
+        /// </summary>
+        private static void PlaceTag(Document doc, View view, Element tag, Element element, XYZ anchor, XYZ lineDirection,
+            XYZ modelDirection, string placement, double gap)
+        {
+            doc.Regenerate();
+            var rect = TagRect(tag, view);
+            if (rect == null) return;
+            var textAcross = rect.MaxV - rect.MinV;
+            if (tag is IndependentTag independent && independent.TagOrientation == TagOrientation.Vertical)
+                textAcross = rect.MaxU - rect.MinU;
+
+            var textAlongElement = false;
+#if REVIT2022_OR_GREATER
+            if (modelDirection != null && tag is IndependentTag rotatable)
+            {
+                rotatable.TagOrientation = TagOrientation.AnyModelDirection;
+                rotatable.RotationAngle = ReadableAngle(modelDirection, view);
+                doc.Regenerate();
+                rect = TagRect(tag, view) ?? rect;
+                textAlongElement = lineDirection != null;
+            }
+#else
+            textAlongElement = modelDirection != null && lineDirection != null && tag is IndependentTag vertical &&
+                               (vertical.TagOrientation == TagOrientation.Vertical) ==
+                               (Math.Abs(lineDirection.DotProduct(view.UpDirection)) > Math.Abs(lineDirection.DotProduct(view.RightDirection)));
+#endif
+            var halfW = (rect.MaxU - rect.MinU) / 2;
+            var halfH = (rect.MaxV - rect.MinV) / 2;
+            double targetU, targetV;
+
+            if (lineDirection != null && (placement == "center" || placement == "above" || placement == "below"))
+            {
+                var target = anchor;
+                if (placement != "center")
+                {
+                    var normal = Normal(lineDirection, view);
+                    var extent = textAlongElement
+                        ? textAcross / 2
+                        : Math.Abs(normal.DotProduct(view.RightDirection)) * halfW + Math.Abs(normal.DotProduct(view.UpDirection)) * halfH;
+                    var distance = HalfWidth(element, view, normal) + gap + extent;
+                    target += normal * (placement == "above" ? distance : -distance);
+                }
+                targetU = target.DotProduct(view.RightDirection);
+                targetV = target.DotProduct(view.UpDirection);
+            }
+            else
+            {
+                var au = anchor.DotProduct(view.RightDirection);
+                var av = anchor.DotProduct(view.UpDirection);
+                var box = TagRect(element, view) ?? new Rect { MinU = au, MaxU = au, MinV = av, MaxV = av };
+                var cu = (box.MinU + box.MaxU) / 2;
+                var cv = (box.MinV + box.MaxV) / 2;
+                var right = box.MaxU + gap + halfW;
+                var left = box.MinU - gap - halfW;
+                var top = box.MaxV + gap + halfH;
+                var bottom = box.MinV - gap - halfH;
+                switch (placement)
+                {
+                    case "above": targetU = cu; targetV = top; break;
+                    case "below": targetU = cu; targetV = bottom; break;
+                    case "left": targetU = left; targetV = cv; break;
+                    case "right": targetU = right; targetV = cv; break;
+                    case "topRight": targetU = right; targetV = top; break;
+                    case "topLeft": targetU = left; targetV = top; break;
+                    case "bottomRight": targetU = right; targetV = bottom; break;
+                    case "bottomLeft": targetU = left; targetV = bottom; break;
+                    default: targetU = cu; targetV = cv; break;
+                }
+            }
+
+            var head = HeadPosition(tag);
+            if (head == null) return;
+            var currentU = (rect.MinU + rect.MaxU) / 2;
+            var currentV = (rect.MinV + rect.MaxV) / 2;
+            MoveHead(doc, tag, head + view.RightDirection * (targetU - currentU) + view.UpDirection * (targetV - currentV));
+        }
+
+        /// <summary>Half the width of a linear element across its line, in model feet (walls: Width; beams: section width).</summary>
+        private static double HalfWidth(Element element, View view, XYZ normal)
+        {
+            if (element is Wall wall) return wall.Width / 2;
+            if (element is FamilyInstance instance)
+            {
+                var type = element.Document.GetElement(element.GetTypeId());
+                var width = PositiveLength(type?.get_Parameter(BuiltInParameter.STRUCTURAL_SECTION_COMMON_WIDTH));
+                foreach (var name in new[] { "b", "Width", "B", "bf" })
+                {
+                    if (width != null) break;
+                    width = PositiveLength(instance.LookupParameter(name)) ?? PositiveLength(type?.LookupParameter(name));
+                }
+                if (width != null) return width.Value / 2;
+            }
+
+            // Fallback: the element's box in the view, only exact for elements along the view axes.
+            var u = Math.Abs(normal.DotProduct(view.RightDirection));
+            var v = Math.Abs(normal.DotProduct(view.UpDirection));
+            if (u > 1e-3 && v > 1e-3) return 0;
+            var box = TagRect(element, view);
+            return box == null ? 0 : (u > v ? box.MaxU - box.MinU : box.MaxV - box.MinV) / 2;
+        }
+
+        private static double? PositiveLength(Parameter parameter) =>
+            parameter != null && parameter.StorageType == StorageType.Double && parameter.AsDouble() > 1e-6 ? parameter.AsDouble() : (double?)null;
+
+        private static double ViewDistance(XYZ a, XYZ b, View view)
+        {
+            var d = b - a;
+            var u = d.DotProduct(view.RightDirection);
+            var v = d.DotProduct(view.UpDirection);
+            return Math.Sqrt(u * u + v * v);
+        }
+
+        private static bool SetLeader(Element tag)
+        {
+            try
+            {
+                if (tag is IndependentTag independent)
+                {
+                    independent.HasLeader = true;
+                    return true;
+                }
+                if (tag is SpatialElementTag spatial)
+                {
+                    spatial.HasLeader = true;
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // Some tag types cannot have a leader.
+            }
+            return false;
+        }
+
+        /// <summary>Tag type from "Family: Type", a type name or a family name (annotation family symbols only).</summary>
+        private static FamilySymbol ResolveTagType(Document doc, string text, List<string> notes)
+        {
+            var candidates = new FilteredElementCollector(doc).OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>()
+                .Where(s => s.Category != null && s.Category.CategoryType == CategoryType.Annotation)
+                .OrderBy(s => s.FamilyName, StringComparer.Ordinal).ThenBy(s => s.Name, StringComparer.Ordinal).ToList();
+            var trimmed = text.Trim();
+            var colon = trimmed.IndexOf(':');
+            var matches = new List<FamilySymbol>();
+            if (colon > 0)
+            {
+                var family = trimmed.Substring(0, colon).Trim();
+                var type = trimmed.Substring(colon + 1).Trim();
+                matches = candidates.Where(s => string.Equals(s.FamilyName, family, StringComparison.OrdinalIgnoreCase) &&
+                                                string.Equals(s.Name, type, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            if (matches.Count == 0)
+                matches = candidates.Where(s => string.Equals(s.Name, trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (matches.Count == 0)
+                matches = candidates.Where(s => string.Equals(s.FamilyName, trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (matches.Count == 0)
+                throw new ArgumentException($"Tag type '{text}' not found. Use 'Family: Type', e.g. " +
+                                            string.Join(", ", candidates.Where(s => s.Category.Name.IndexOf("Tag", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                .Take(15).Select(s => $"{s.FamilyName}: {s.Name}")));
+            if (matches.Count > 1)
+                notes.Add($"tagTypeName '{text}' matches {matches.Count} types; used '{matches[0].FamilyName}: {matches[0].Name}'.");
+            return matches[0];
         }
 
         // ---------------------------------------------------------------- placement helpers

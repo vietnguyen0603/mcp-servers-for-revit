@@ -33,6 +33,30 @@ namespace RevitMCPCommandSet.Services.Views
             var doc = uiDoc.Document;
             var actions = DocumentationUtils.RequireArray(parameters, "actions");
 
+            // Reject names Revit would refuse before opening a transaction.
+            var nameErrors = new List<string>();
+            for (var i = 0; i < actions.Count; i++)
+            {
+                if (!(actions[i] is JObject a))
+                    continue;
+                foreach (var field in new[] { "name", "fromTemplate", "templateName" })
+                {
+                    if (!(a[field] is JToken token) || token.Type != JTokenType.String)
+                        continue;
+                    try
+                    {
+                        ValidateViewName(token.ToString(), field);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        nameErrors.Add($"actions[{i}]: {ex.Message}");
+                    }
+                }
+            }
+
+            if (nameErrors.Count > 0)
+                return Fail(string.Join(" ", nameErrors));
+
             List<JObject> results;
             if (actions.All(a => string.Equals(a.Value<string>("action"), "list", StringComparison.OrdinalIgnoreCase)))
             {
@@ -159,6 +183,7 @@ namespace RevitMCPCommandSet.Services.Views
                 id = t.Id.GetValue(),
                 name = t.Name,
                 viewType = t.ViewType.ToString(),
+                templateKind = TemplateKind(t),
                 scale = SafeGet(() => (int?)t.Scale, null),
                 detailLevel = SafeGet(() => t.DetailLevel.ToString(), null),
                 discipline = SafeGet(() => t.HasViewDiscipline() ? t.Discipline.ToString() : null, null),
@@ -235,6 +260,9 @@ namespace RevitMCPCommandSet.Services.Views
             var name = (action.Value<string>("name") ?? "").Trim();
             if (name.Length == 0)
                 throw new ArgumentException("'name' is required.");
+            ValidateViewName(name, "name");
+            if (action["fromTemplate"] is JToken fromName && fromName.Type == JTokenType.String)
+                ValidateViewName(fromName.ToString(), "fromTemplate");
 
             var existing = FindTemplateByName(doc, name);
             if (existing != null)
@@ -243,7 +271,8 @@ namespace RevitMCPCommandSet.Services.Views
                     return new
                     {
                         action = "create", templateId = existing.Id.GetValue(), name = existing.Name,
-                        viewType = existing.ViewType.ToString(), reused = true
+                        viewType = existing.ViewType.ToString(), templateKind = TemplateKind(existing), reused = true,
+                        warnings = MisleadingOverrideWarnings(existing)
                     };
                 throw new InvalidOperationException(
                     $"A view template named '{existing.Name}' already exists (id {existing.Id.GetValue()}). Use ifExists:'reuse' or another name.");
@@ -252,6 +281,7 @@ namespace RevitMCPCommandSet.Services.Views
             var warnings = new List<string>();
             View template;
             string source;
+            string temporaryViewFamily = null;
             var fromViewId = DocumentationUtils.ReadId(action, "fromViewId");
             var fromTemplate = action["fromTemplate"];
             if (fromTemplate != null && fromTemplate.Type != JTokenType.Null)
@@ -278,6 +308,7 @@ namespace RevitMCPCommandSet.Services.Views
                 var viewType = action.Value<string>("viewType")
                                ?? throw new ArgumentException("Provide viewType, fromViewId or fromTemplate.");
                 var temporary = CreateTemporaryView(doc, viewType, out var cleanup);
+                temporaryViewFamily = DescribeViewFamily(doc, temporary);
                 template = temporary.CreateViewTemplate();
                 foreach (var id in cleanup)
                 {
@@ -299,15 +330,112 @@ namespace RevitMCPCommandSet.Services.Views
                 throw new InvalidOperationException("Revit did not create the view template.");
             template.Name = name;
 
+            var note = IsPlanType(template.ViewType)
+                ? $"Revit stores plan templates with viewType {template.ViewType} whatever the source view family; " +
+                  $"this one is '{TemplateKind(template)}' (change it with modify discipline) and can be applied to floor and structural plan views alike."
+                : null;
+            warnings.AddRange(MisleadingOverrideWarnings(template));
+
             return new
             {
                 action = "create",
                 templateId = template.Id.GetValue(),
                 name = template.Name,
                 viewType = template.ViewType.ToString(),
+                templateKind = TemplateKind(template),
+                temporaryViewFamily,
                 source,
+                note,
                 warnings
             };
+        }
+
+        /// <summary>Characters Revit refuses in view / view template names.</summary>
+        private static readonly char[] ProhibitedNameChars = { '\\', ':', '{', '}', '[', ']', '|', ';', '<', '>', '?', '`', '~' };
+
+        private static void ValidateViewName(string name, string field)
+        {
+            var bad = (name ?? "").Where(c => ProhibitedNameChars.Contains(c)).Distinct().ToList();
+            if (bad.Count > 0)
+                throw new ArgumentException(
+                    $"{field} '{name}' contains {string.Join(" ", bad.Select(c => $"'{c}'"))}; Revit view/template names cannot contain {string.Join(" ", ProhibitedNameChars)}.");
+        }
+
+        private static bool IsPlanType(ViewType type) =>
+            type == ViewType.FloorPlan || type == ViewType.EngineeringPlan || type == ViewType.AreaPlan;
+
+        /// <summary>
+        ///     Human-readable template kind. Plan templates are all ViewType
+        ///     FloorPlan in Revit, so the discipline is what tells a
+        ///     "structural plan" template apart.
+        /// </summary>
+        private static string TemplateKind(View view)
+        {
+            switch (view.ViewType)
+            {
+                case ViewType.FloorPlan:
+                case ViewType.EngineeringPlan:
+                {
+                    var discipline = SafeGet(() => view.HasViewDiscipline() ? view.Discipline.ToString() : null, null);
+                    return discipline == null ? "Plan" : $"Plan ({discipline} discipline)";
+                }
+                case ViewType.AreaPlan: return "Area Plan";
+                case ViewType.CeilingPlan: return "Ceiling Plan";
+                case ViewType.Section: return "Section";
+                case ViewType.Elevation: return "Elevation";
+                case ViewType.ThreeD: return "3D";
+                case ViewType.DraftingView: return "Drafting";
+                case ViewType.Detail: return "Detail";
+                default: return view.ViewType.ToString();
+            }
+        }
+
+        private static string DescribeViewFamily(Document doc, View view)
+        {
+            var type = SafeGet(() => doc.GetElement(view.GetTypeId()) as ViewFamilyType, null);
+            return type == null ? view.ViewType.ToString() : $"{type.ViewFamily} ('{type.Name}')";
+        }
+
+        private static readonly (BuiltInCategory category, string name)[] SlabLikeCategories =
+        {
+            (BuiltInCategory.OST_Floors, "Floors"),
+            (BuiltInCategory.OST_StructuralFoundation, "Structural Foundations")
+        };
+
+        /// <summary>
+        ///     Warns about Floors / Structural Foundations overrides that make
+        ///     framing below a slab draw as solid lines instead of dashed hidden
+        ///     lines (high transparency, or a hidden surface pattern together with
+        ///     transparency) - typically inherited from the source view/template.
+        /// </summary>
+        private static List<string> MisleadingOverrideWarnings(View view)
+        {
+            var warnings = new List<string>();
+            var doc = view.Document;
+            foreach (var (bic, name) in SlabLikeCategories)
+            {
+                var category = SafeGet(() => Category.GetCategory(doc, bic), null);
+                if (category == null)
+                    continue;
+                if (SafeGet(() => view.GetCategoryHidden(category.Id), false))
+                    continue;
+                var settings = SafeGet(() => view.GetCategoryOverrides(category.Id), null);
+                if (settings == null)
+                    continue;
+                var transparency = settings.Transparency;
+                var surfaceHidden = !settings.IsSurfaceForegroundPatternVisible;
+                if (transparency >= 50 || (surfaceHidden && transparency > 0))
+                {
+                    var what = surfaceHidden
+                        ? $"transparency {transparency} with the surface pattern hidden"
+                        : $"transparency {transparency}";
+                    warnings.Add(
+                        $"'{view.Name}' overrides {name} with {what}: beams/framing under the slab show through as solid lines instead of dashed hidden lines. " +
+                        $"Fix: modify categories:[{{category:'{name}', reset:true, transparency:0}}] (add other {name} overrides again after reset).");
+                }
+            }
+
+            return warnings;
         }
 
         private static View DuplicateTemplate(Document doc, View src)
@@ -532,11 +660,15 @@ namespace RevitMCPCommandSet.Services.Views
                     r.Try("controlled", () => SetControlled(view, controlled, r));
             }
 
+            r.Warnings.AddRange(MisleadingOverrideWarnings(view));
+
             return new
             {
                 viewId = view.Id.GetValue(),
                 name = view.Name,
                 isTemplate = view.IsTemplate,
+                viewType = view.ViewType.ToString(),
+                templateKind = view.IsTemplate ? TemplateKind(view) : null,
                 changed = r.Changed,
                 warnings = r.Warnings
             };
@@ -691,10 +823,10 @@ namespace RevitMCPCommandSet.Services.Views
             List<(Category category, string path, Category parent)> all, Report r)
         {
             var name = spec.Value<string>("category") ?? "";
-            var category = ResolveCategoryPath(doc, name);
+            var category = CategoryNameUtils.ResolveCategoryPath(doc, name);
             if (category == null)
             {
-                r.Warnings.Add($"Unknown category '{name}'.{Suggest(name, all.Select(c => c.path))}");
+                r.Warnings.Add($"Unknown category '{name}'.{CategoryNameUtils.SuggestCategory(doc, name, all.Select(c => c.path))}");
                 return;
             }
 
@@ -1143,6 +1275,7 @@ namespace RevitMCPCommandSet.Services.Views
             var name = action.Value<string>("templateName");
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Provide templateId or templateName.");
+            ValidateViewName(name, "templateName");
             return FindTemplateByName(doc, name)
                    ?? throw new ArgumentException($"View template '{name}' not found.{SuggestTemplates(doc, name)}");
         }
@@ -1157,32 +1290,6 @@ namespace RevitMCPCommandSet.Services.Views
         private static string SuggestTemplates(Document doc, string name) =>
             Suggest(name, new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>()
                 .Where(v => v.IsTemplate).Select(v => v.Name));
-
-        /// <summary>
-        ///     Resolves "Category" or "Category/Subcategory"; the full text is tried
-        ///     first because a few category names contain '/'.
-        /// </summary>
-        private static Category ResolveCategoryPath(Document doc, string name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-                return null;
-            var direct = DocumentationUtils.ResolveCategory(doc, name);
-            if (direct != null)
-                return direct;
-
-            for (var slash = name.IndexOf('/'); slash > 0; slash = name.IndexOf('/', slash + 1))
-            {
-                var parent = DocumentationUtils.ResolveCategory(doc, name.Substring(0, slash));
-                if (parent == null)
-                    continue;
-                var subName = name.Substring(slash + 1).Trim();
-                foreach (Category sub in parent.SubCategories)
-                    if (string.Equals(sub.Name, subName, StringComparison.OrdinalIgnoreCase))
-                        return sub;
-            }
-
-            return null;
-        }
 
         /// <summary>Model and annotation categories plus their subcategories, sorted by path.</summary>
         private static List<(Category category, string path, Category parent)> AllCategories(Document doc)
@@ -1201,46 +1308,8 @@ namespace RevitMCPCommandSet.Services.Views
         }
 
         /// <summary>" Did you mean: a, b, c?" for the closest candidates, or "".</summary>
-        private static string Suggest(string query, IEnumerable<string> candidates)
-        {
-            var key = NormalizeKey(query);
-            if (key.Length == 0)
-                return "";
-            var ranked = candidates.Where(c => !string.IsNullOrEmpty(c)).Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(c =>
-                {
-                    var ck = NormalizeKey(c);
-                    var score = ck == key ? 0
-                        : ck.Contains(key) || key.Contains(ck) ? 1 + Math.Abs(ck.Length - key.Length) / 10.0
-                        : 3 + Levenshtein(ck, key) / (double)Math.Max(1, key.Length);
-                    return (name: c, score);
-                })
-                .Where(x => x.score < 4)
-                .OrderBy(x => x.score).ThenBy(x => x.name.Length)
-                .Take(5)
-                .Select(x => x.name)
-                .ToList();
-            return ranked.Count == 0 ? "" : $" Did you mean: {string.Join(", ", ranked)}?";
-        }
-
-        private static int Levenshtein(string a, string b)
-        {
-            var previous = new int[b.Length + 1];
-            var current = new int[b.Length + 1];
-            for (var j = 0; j <= b.Length; j++) previous[j] = j;
-            for (var i = 1; i <= a.Length; i++)
-            {
-                current[0] = i;
-                for (var j = 1; j <= b.Length; j++)
-                    current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1),
-                        previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
-                var swap = previous;
-                previous = current;
-                current = swap;
-            }
-
-            return previous[b.Length];
-        }
+        private static string Suggest(string query, IEnumerable<string> candidates) =>
+            CategoryNameUtils.Suggest(query, candidates);
 
         private static T SafeGet<T>(Func<T> get, T fallback)
         {

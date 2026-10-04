@@ -119,7 +119,11 @@ const listAction = z
 const createAction = z
   .object({
     action: z.literal("create"),
-    name: z.string().min(1).max(256).describe("New template name"),
+    name: z
+      .string()
+      .min(1)
+      .max(256)
+      .describe("New template name (no \\ : { } [ ] | ; < > ? ` ~)"),
     viewType: z
       .enum(["FloorPlan", "StructuralPlan", "CeilingPlan", "Section", "Elevation", "ThreeD", "Drafting"])
       .optional()
@@ -220,11 +224,31 @@ const actionSchema = z.discriminatedUnion("action", [listAction, createAction, m
 
 type Action = z.infer<typeof actionSchema>;
 
+/** Characters Revit refuses in view and view template names. */
+export const REVIT_PROHIBITED_NAME_CHARS = ["\\", ":", "{", "}", "[", "]", "|", ";", "<", ">", "?", "`", "~"] as const;
+
+/** Error text when a view/template name contains Revit-prohibited characters, else null. */
+export function revitViewNameError(name: string): string | null {
+  const found = REVIT_PROHIBITED_NAME_CHARS.filter((c) => name.includes(c));
+  if (found.length === 0) return null;
+  return `name '${name}' contains ${found.map((c) => `'${c}'`).join(" ")}; Revit view/template names cannot contain ${REVIT_PROHIBITED_NAME_CHARS.join(" ")}`;
+}
+
 /** Cross-field checks zod's discriminated union cannot express; returns error messages. */
 export function validateViewTemplateActions(actions: Action[]): string[] {
   const errors: string[] = [];
   actions.forEach((a, i) => {
     const at = `actions[${i}] (${a.action})`;
+    const checkName = (field: string, value: unknown) => {
+      if (typeof value !== "string") return;
+      const error = revitViewNameError(value);
+      if (error) errors.push(`${at}: ${field} ${error}`);
+    };
+    if (a.action === "create") {
+      checkName("name", a.name);
+      checkName("fromTemplate", a.fromTemplate);
+    }
+    if (a.action === "modify" || a.action === "apply") checkName("templateName", a.templateName);
     if (a.action === "create") {
       if (a.fromViewId !== undefined && a.fromTemplate !== undefined)
         errors.push(`${at}: give fromViewId or fromTemplate, not both`);
@@ -259,13 +283,15 @@ export function validateViewTemplateActions(actions: Action[]): string[] {
 export function registerManageViewTemplatesTool(server: McpServer) {
   server.tool(
     "manage_view_templates",
-    `List, create, modify and apply view templates in one call (actions run in order, one undo step; each action is isolated so one failure does not discard the others; a template created earlier in the call can be referenced by templateName later). Use it to set up a drawing style when the project has no suitable template, e.g. a 'S-FRAMING PLAN 1:150' StructuralPlan template: create -> modify {scale:150, detailLevel:'Medium', discipline:'Structural', showHiddenLines:'ByDiscipline', categories:[{category:'Structural Columns', cutFill:{pattern:'<Solid fill>', color:[128,128,128]}, cutLine:{weight:5}}, {category:'Floors', projectionLine:{weight:1}}, {category:'Grids', visible:true}]} -> apply {viewIds}.
+    `List, create, modify and apply view templates in one call (actions run in order, one undo step; each action is isolated so one failure does not discard the others; a template created earlier in the call can be referenced by templateName later). Use it to set up a drawing style when the project has no suitable template, e.g. a 'S-FRAMING PLAN 1-150' StructuralPlan template (no ':' in names): create -> modify {scale:150, detailLevel:'Medium', discipline:'Structural', showHiddenLines:'ByDiscipline', categories:[{category:'Structural Columns', cutFill:{pattern:'<Solid fill>', color:[128,128,128]}, cutLine:{weight:5}}, {category:'Floors', projectionLine:{weight:1}}, {category:'Grids', visible:true}]} -> apply {viewIds}.
 Actions:
 - list: templates with type, scale, detail level, discipline, controlled parameters, filters and hidden/overridden categories.
 - create: from a temporary view of viewType, from an existing view (fromViewId) or by duplicating a template (fromTemplate).
 - modify: templateId/templateName, or viewIds to modify ordinary views. Category/filter overrides merge with existing ones unless reset:true.
 - apply: assign the template to views, or copy its properties once (applyPropertiesOnly).
-Patterns are names, colors [r,g,b], lengths mm. Unknown category/pattern/parameter names are reported as warnings with suggestions; the rest of the action still applies.`,
+Patterns are names, colors [r,g,b], lengths mm. Category and subcategory names ignore case, extra spaces and surrounding <> ('Structural Framing/Hidden Lines' finds '<Hidden Lines>'). Unknown category/pattern/parameter names are reported as warnings with suggestions; the rest of the action still applies.
+Revit stores every plan template (floor and structural plan) with viewType FloorPlan; templateKind (e.g. 'Plan (Structural discipline)') tells them apart by discipline. After create/modify a warning flags Floors/Structural Foundations overrides (transparency >= 50, or hidden surface pattern + transparency) that make beams under slabs look solid instead of dashed; fix with {category:'Floors', reset:true, transparency:0}.
+Names cannot contain \\ : { } [ ] | ; < > ? \` ~.`,
     {
       actions: z.array(actionSchema).min(1).max(50).describe("Actions executed in order"),
     },

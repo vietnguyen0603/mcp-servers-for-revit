@@ -437,9 +437,9 @@ namespace RevitMCPCommandSet.Services.Views
         private static JObject ApplyObjectStyle(Document doc, JObject item)
         {
             var path = RequireName(item, "category");
-            var category = ResolveCategoryPath(doc, path)
+            var category = CategoryNameUtils.ResolveCategoryPath(doc, path)
                            ?? throw new ArgumentException(
-                               $"Category '{path}' not found. Use a category name or OST_ name, or 'Category/Subcategory' for a subcategory (subcategories are not created here).");
+                               $"Category '{path}' not found.{CategoryNameUtils.SuggestCategory(doc, path)} Use a category name or OST_ name, or 'Category/Subcategory' for a subcategory (subcategories are not created here; '<>' around names is optional).");
 
             var projection = ReadPen(item, "projectionWeight");
             var cut = ReadPen(item, "cutWeight");
@@ -485,27 +485,6 @@ namespace RevitMCPCommandSet.Services.Views
             if (warnings.Count > 0)
                 result["warnings"] = warnings;
             return result;
-        }
-
-        private static Category ResolveCategoryPath(Document doc, string path)
-        {
-            var whole = DocumentationUtils.ResolveCategory(doc, path);
-            if (whole != null)
-                return whole;
-
-            var slash = path.IndexOf('/');
-            while (slash > 0 && slash < path.Length - 1)
-            {
-                var parent = DocumentationUtils.ResolveCategory(doc, path.Substring(0, slash));
-                var subName = path.Substring(slash + 1).Trim();
-                var sub = parent?.SubCategories.Cast<Category>()
-                    .FirstOrDefault(c => string.Equals(c.Name, subName, StringComparison.OrdinalIgnoreCase));
-                if (sub != null)
-                    return sub;
-                slash = path.IndexOf('/', slash + 1);
-            }
-
-            return null;
         }
 
         private static bool IsCuttable(Category category)

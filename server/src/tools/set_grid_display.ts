@@ -55,7 +55,7 @@ export function registerSetGridDisplayTool(server: McpServer) {
     "Fix how grids display in plan/section/elevation views: bubble ends, 2D extents and propagation. " +
       "Bubbles are resolved geometrically per grid in each view (End0/End1 order is arbitrary), e.g. bubbles:'top-left' puts vertical grid bubbles at the top and horizontal ones at the left; groups override per grid set, e.g. groups:[{grids:['1','2'], bubbles:'bottom'}]. " +
       "extents:'clipToCrop' or {offsetPaperMm:12} sets view-specific (2D) extents of straight grids to the crop region so every bubble sits at the drawing edge. " +
-      "propagateToViews copies the 2D extents of the first view to parallel views (ids). Grids not visible in a view are skipped and listed under notVisible; grids parallel to the requested side are left unchanged. One undo step.",
+      "propagateToViews copies the 2D extents of the first view to parallel views (ids). Grids not visible in a view are skipped and listed under notVisible; grids parallel to the requested side are left unchanged and listed under parallelSkipped. The response is compact (counts + exceptions only) unless verbose:true. One undo step.",
     {
       views: z.array(elementIdSchema).min(1).max(200).describe("View ids to update (see list_views)"),
       grids: z.array(gridRef).min(1).max(1000).optional().describe("Grids to change (default: all grids visible in each view)"),
@@ -79,6 +79,12 @@ export function registerSetGridDisplayTool(server: McpServer) {
         .max(500)
         .optional()
         .describe("Copy the 2D grid extents from the first view in 'views' to these parallel views"),
+      verbose: z
+        .boolean()
+        .optional()
+        .describe(
+          "Return every grid's bubble/extent detail per view. Default (false) is compact: per view counts (gridsProcessed, bubblesChanged, extentsChanged), notVisible and parallelSkipped names, and only grids whose result differs from the request or that failed"
+        ),
     },
     async (args) => {
       if (!args.bubbles && !args.groups?.length && !args.extents && !args.propagateToViews?.length) {

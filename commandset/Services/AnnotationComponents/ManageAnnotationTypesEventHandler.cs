@@ -11,9 +11,12 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
     ///     annotation types that define a project's drawing style: text note,
     ///     dimension, spot elevation, grid, level, viewport and arrowhead types.
     ///     Friendly setting keys map to BuiltInParameters with a parameter-name
-    ///     fallback; lengths are millimetres, angles degrees. Each type item is
-    ///     applied atomically (all settings or none) inside one undoable
-    ///     transaction. list is read-only and opens no transaction.
+    ///     fallback; lengths are millimetres, angles degrees. Each type item
+    ///     applies every writable setting and reports read-only, inapplicable or
+    ///     rejected ones as skipped warnings; an item fails (and is rolled back)
+    ///     only when nothing could be applied or the type could not be created.
+    ///     All items share one undoable transaction. list is read-only and opens
+    ///     no transaction.
     /// </summary>
     public class ManageAnnotationTypesEventHandler : JsonParameterEventHandler
     {
@@ -227,56 +230,102 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 status = action == "setDefault" ? "defaultSet" : "updated";
             }
 
+            // Every requested change is applied independently: read-only,
+            // inapplicable or rejected settings are skipped with a reason, and
+            // the item only fails when nothing at all could be applied.
             var applied = new JArray();
-            var errors = new List<string>();
+            var skipped = new List<(string setting, string reason)>();
             var warnings = new JArray();
+            var requested = 0;
 
             if (action != "setDefault")
             {
                 var rename = item.Value<string>("rename")?.Trim();
                 if (!string.IsNullOrEmpty(rename) && rename != type.Name)
                 {
+                    requested++;
                     if (allOfKind.Any(t => t.Id != type.Id && string.Equals(t.Name, rename, StringComparison.OrdinalIgnoreCase)))
-                        errors.Add($"Cannot rename to '{rename}': another {kind} type has that name.");
+                        skipped.Add(("rename", $"another {kind} type is already named '{rename}'"));
                     else
                     {
-                        type.Name = rename;
-                        applied.Add("rename");
+                        try
+                        {
+                            type.Name = rename;
+                            applied.Add("rename");
+                        }
+                        catch (Exception ex)
+                        {
+                            skipped.Add(("rename", ex.Message));
+                        }
                     }
                 }
 
                 if (item["settings"] is JObject settings)
-                    ApplySettings(doc, kind, type, settings, applied, errors, warnings);
+                {
+                    requested += settings.Count;
+                    ApplySettings(doc, kind, type, settings, applied, skipped, warnings);
+                }
 
                 if (item["parameters"] is JObject raw)
                 {
                     foreach (var property in raw.Properties())
                     {
-                        var error = DocumentationUtils.SetParameterValue(type, property.Name, property.Value);
+                        requested++;
+                        string error;
+                        try
+                        {
+                            error = DocumentationUtils.SetParameterValue(type, property.Name, property.Value);
+                        }
+                        catch (Exception ex)
+                        {
+                            error = ex.Message;
+                        }
+
                         if (error == null)
                             applied.Add(property.Name);
                         else
-                            errors.Add(error.Contains("not found") ? $"{error} {AvailableParameters(type)}" : error);
+                            skipped.Add((property.Name,
+                                error.Contains("not found") ? $"{error} {AvailableParameters(type)}" : error));
                     }
                 }
             }
 
-            if (errors.Count > 0)
-                throw new ArgumentException($"'{name}': {string.Join(" | ", errors)}");
-
-            if (action == "setDefault" || item.Value<bool?>("setAsDefault") == true)
+            var setDefault = action == "setDefault" || item.Value<bool?>("setAsDefault") == true;
+            if (setDefault)
             {
-                var group = DefaultGroup(kind, type)
-                            ?? throw new ArgumentException($"{kind} type '{type.Name}' has no document default group.");
-                if (!doc.IsDefaultElementTypeIdValid(group, type.Id))
-                    throw new ArgumentException($"'{type.Name}' cannot be the default {group}.");
-                doc.SetDefaultElementTypeId(group, type.Id);
-                applied.Add($"default:{group}");
+                requested++;
+                try
+                {
+                    var group = DefaultGroup(kind, type)
+                                ?? throw new ArgumentException($"{kind} type '{type.Name}' has no document default group.");
+                    if (!doc.IsDefaultElementTypeIdValid(group, type.Id))
+                        throw new ArgumentException($"'{type.Name}' cannot be the default {group}.");
+                    doc.SetDefaultElementTypeId(group, type.Id);
+                    applied.Add($"default:{group}");
+                }
+                catch (Exception ex)
+                {
+                    if (action == "setDefault")
+                        throw;
+                    skipped.Add(("setAsDefault", ex.Message));
+                }
             }
+
+            if (requested > 0 && applied.Count == 0)
+                throw new ArgumentException(
+                    $"'{name}': nothing could be applied{(status == "created" ? " (type not created)" : "")}: " +
+                    string.Join(" | ", skipped.Select(s => $"{s.setting}: {s.reason}")));
 
             var result = Describe(doc, kind, type, false);
             result["status"] = status;
             result["applied"] = applied;
+            if (skipped.Count > 0)
+            {
+                result["skipped"] = new JArray(skipped.Select(s => new JObject { ["setting"] = s.setting, ["reason"] = s.reason }));
+                warnings.Insert(0,
+                    $"Not applied ({skipped.Count}): {string.Join(", ", skipped.Select(s => s.setting))}; the other settings were applied.");
+            }
+
             if (warnings.Count > 0)
                 result["warnings"] = warnings;
             return result;
@@ -306,7 +355,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
         }
 
         private static void ApplySettings(Document doc, string kind, ElementType type, JObject settings, JArray applied,
-            List<string> errors, JArray warnings)
+            List<(string setting, string reason)> skipped, JArray warnings)
         {
             var specs = SettingsByKind[kind];
 
@@ -330,7 +379,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 var setting = specs.FirstOrDefault(s => s.Key == property.Name);
                 if (setting == null)
                 {
-                    errors.Add($"Setting '{property.Name}' does not apply to {kind} types. Valid: {string.Join(", ", specs.Select(s => s.Key))}.");
+                    skipped.Add((property.Name, $"does not apply to {kind} types. Valid: {string.Join(", ", specs.Select(s => s.Key))}."));
                     continue;
                 }
 
@@ -350,13 +399,13 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     var parameter = FindParameter(type, setting);
                     if (parameter == null)
                     {
-                        errors.Add($"'{setting.Key}' ({string.Join(" / ", setting.Names)}) is not a parameter of '{type.Name}'. {AvailableParameters(type)}");
+                        skipped.Add((setting.Key, $"'{string.Join(" / ", setting.Names)}' is not a parameter of '{type.Name}'."));
                         continue;
                     }
 
                     if (parameter.IsReadOnly)
                     {
-                        errors.Add($"'{setting.Key}' ({parameter.Definition.Name}) is read-only on '{type.Name}'.");
+                        skipped.Add((setting.Key, $"'{parameter.Definition.Name}' is read-only on '{type.Name}'."));
                         continue;
                     }
 
@@ -365,7 +414,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"'{setting.Key}': {ex.Message}");
+                    skipped.Add((setting.Key, ex.Message));
                 }
             }
         }
@@ -499,7 +548,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             throw new ArgumentException($"expected true/false, got {value?.ToString(Newtonsoft.Json.Formatting.None)}.");
         }
 
-        private static int ParseColor(JToken value)
+        internal static int ParseColor(JToken value)
         {
             int r, g, b;
             if (value is JObject obj)

@@ -110,6 +110,12 @@ describe("manage_annotation_types", () => {
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
+  it("documents partial application (read-only settings are skipped, not fatal)", () => {
+    const tool = setup()("manage_annotation_types");
+    expect(tool.description).toMatch(/skipped/);
+    expect(tool.description).not.toMatch(/all-or-nothing/);
+  });
+
   it("maps every settings key to at least one kind", () => {
     const keys = Object.keys(annotationSettingsSchema.shape);
     expect(keys.sort()).toEqual(Object.keys(SETTING_KINDS).sort());
@@ -134,6 +140,14 @@ describe("set_grid_display", () => {
     };
     await tool.invoke(args);
     expect(sendCommand).toHaveBeenCalledWith("set_grid_display", args, 200000);
+  });
+
+  it("is compact by default and forwards verbose", async () => {
+    const tool = setup()("set_grid_display");
+    expect(tool.description).toMatch(/compact/);
+    await tool.invoke({ views: [5], bubbles: "both", verbose: true });
+    expect(sendCommand).toHaveBeenCalledWith("set_grid_display", { views: [5], bubbles: "both", verbose: true }, 200000);
+    expect(() => tool.parse({ views: [5], bubbles: "both", verbose: "yes" })).toThrow();
   });
 
   it("accepts clipToCrop and grid names", async () => {

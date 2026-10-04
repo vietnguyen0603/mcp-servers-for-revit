@@ -469,6 +469,16 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "snap_to_grid",
+      "description": "Round element offsets from grids (or global X/Y) to a step, moving columns, footings, piles, walls and beams by small shifts; dry run by default",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "style_tag_families",
+      "description": "Edit tag and annotation families so their label/text types (font, size, width, bold, colour, line weight) match the project text style, then reload them",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_family",
       "description": "Build a parametric extruded family (rectangular/circular, e.g. barrette or bored pile) from a template, load it and create types",
       "assemblyPath": "RevitMCPCommandSet.dll"

@@ -134,6 +134,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["dimension", "column dimension", "wall thickness", "shear wall", "core wall", "grid offset", "column layout", "setting out"],
   },
+  snap_to_grid: {
+    catalogs: ["structure", "modify"],
+    readOnly: false,
+    keywords: ["snap", "round", "align", "grid offset", "position error", "setting out", "clean model", "tolerance", "extracted model", "column position"],
+  },
+  style_tag_families: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["tag family", "label", "font", "text size", "width factor", "grid head", "level head", "view title", "match text style", "line weight", "reload family"],
+  },
   create_family: {
     catalogs: ["structure", "architecture"],
     readOnly: false,

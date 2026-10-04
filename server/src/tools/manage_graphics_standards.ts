@@ -151,7 +151,7 @@ const fillPatternSchema = z
 const objectStyleSchema = z
   .object({
     category: nameSchema.describe(
-      "Category ('Structural Framing' or 'OST_StructuralFraming'), or 'Category/Subcategory' e.g. 'Structural Framing/Hidden Lines'"
+      "Category ('Structural Framing' or 'OST_StructuralFraming'), or 'Category/Subcategory' e.g. 'Structural Framing/Hidden Lines'. Names ignore case, extra spaces and surrounding <> (Revit's '<Hidden Lines>' matches 'Hidden Lines'); unknown names list close matches"
     ),
     projectionWeight: penSchema.optional().describe("Projection line weight, pen 1-16"),
     cutWeight: penSchema.optional().describe("Cut line weight, pen 1-16 (cuttable categories only)"),

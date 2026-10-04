@@ -113,6 +113,17 @@ describe("manage_graphics_standards", () => {
     expect(() => t.parse({ objectStyles: [{ category: "Walls", bogus: 1 }] })).toThrow();
   });
 
+  it("forwards angle-bracketed and loosely spelled subcategory names unchanged (matched in Revit)", async () => {
+    const t = tool();
+    const objectStyles = [
+      { category: "Structural Framing/<Hidden Lines>", projectionWeight: 1 },
+      { category: "structural framing / hidden  lines", pattern: "Hidden" },
+    ];
+    await t.invoke({ objectStyles });
+    const [, params] = sendCommand.mock.calls[0];
+    expect(params.objectStyles).toEqual(objectStyles);
+  });
+
   it("forwards lineWeights (answered with a not-supported note by Revit)", async () => {
     const t = tool();
     expect(t.description).toMatch(/lineWeights/);

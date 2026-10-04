@@ -44,6 +44,7 @@ namespace RevitMCPCommandSet.Services.Datums
             var extents = ReadExtents(parameters["extents"]);
             var requestedGrids = (parameters["grids"] as JArray)?.ToList();
             var propagateTargets = (parameters["propagateToViews"] as JArray)?.Select(t => t.Value<long>()).ToList();
+            var verbose = parameters.Value<bool?>("verbose") ?? false;
 
             if (defaultSide == null && groups.Count == 0 && extents == null && (propagateTargets == null || propagateTargets.Count == 0))
                 return Fail("Nothing to do: give bubbles, groups, extents or propagateToViews.");
@@ -66,7 +67,8 @@ namespace RevitMCPCommandSet.Services.Datums
                 {
                     try
                     {
-                        viewResults.Add(ProcessView(doc, view, allGrids, requestedGrids, defaultSide, groups, extents, ref changedGrids));
+                        viewResults.Add(ProcessView(doc, view, allGrids, requestedGrids, defaultSide, groups, extents, verbose,
+                            ref changedGrids));
                     }
                     catch (Exception ex)
                     {
@@ -87,11 +89,20 @@ namespace RevitMCPCommandSet.Services.Datums
                     return Fail($"Transaction was not committed ({status}).");
             }
 
-            return Ok($"Updated grid display in {views.Count} view(s) ({changedGrids} grid edits).", new { views = viewResults });
+            return Ok($"Updated grid display in {views.Count} view(s) ({changedGrids} grid edits)." +
+                      (verbose ? "" : " Compact result: pass verbose:true for every grid's detail."),
+                new { views = viewResults });
         }
 
+        /// <summary>
+        ///     Default (compact) result per view: counts, notVisible and
+        ///     parallelSkipped names, and only grids whose result differs from the
+        ///     request (extents left unchanged) - failures go to 'skipped'.
+        ///     verbose adds every grid's bubble/extent detail under 'grids'.
+        /// </summary>
         private static JObject ProcessView(Document doc, View view, List<Grid> allGrids, List<JToken> requestedGrids,
-            string defaultSide, List<KeyValuePair<List<JToken>, string>> groups, Extents extents, ref int changedGrids)
+            string defaultSide, List<KeyValuePair<List<JToken>, string>> groups, Extents extents, bool verbose,
+            ref int changedGrids)
         {
             var result = new JObject { ["viewId"] = view.Id.GetValue(), ["viewName"] = view.Name };
             var visibleIds = new HashSet<long>(new FilteredElementCollector(doc, view.Id).OfClass(typeof(Grid))
@@ -117,7 +128,12 @@ namespace RevitMCPCommandSet.Services.Datums
             }
 
             var gridResults = new JArray();
+            var differing = new JArray();
             var skipped = new JArray();
+            var parallelSkipped = new JArray();
+            var bubblesChanged = 0;
+            var extentsChanged = 0;
+            var processed = 0;
             foreach (var grid in targets.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase))
             {
                 if (!visibleIds.Contains(grid.Id.GetValue()) || !SafeCanBeVisible(grid, view))
@@ -134,22 +150,46 @@ namespace RevitMCPCommandSet.Services.Datums
                 }
 
                 var item = new JObject { ["name"] = grid.Name, ["id"] = grid.Id.GetValue() };
+                var differs = false;
                 try
                 {
                     if (rect != null)
                     {
-                        item["extents"] = ClipToRect(grid, view, transform, rect);
-                        changedGrids++;
+                        var extentResult = ClipToRect(grid, view, transform, rect);
+                        item["extents"] = extentResult;
+                        if (extentResult.StartsWith("clipped", StringComparison.Ordinal))
+                        {
+                            extentsChanged++;
+                            changedGrids++;
+                        }
+                        else
+                        {
+                            differs = true;
+                        }
                     }
 
                     if (side != null)
                     {
-                        item["bubbles"] = ApplyBubbles(grid, view, transform, side);
-                        changedGrids++;
+                        var bubbleResult = ApplyBubbles(grid, view, transform, side);
+                        item["bubbles"] = bubbleResult;
+                        if (bubbleResult.Value<string>("result") == "unchanged")
+                        {
+                            parallelSkipped.Add(grid.Name);
+                        }
+                        else
+                        {
+                            bubblesChanged++;
+                            changedGrids++;
+                        }
                     }
 
                     if (item.Count > 2)
+                    {
+                        processed++;
                         gridResults.Add(item);
+                        if (differs)
+                            differing.Add(item);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -161,7 +201,21 @@ namespace RevitMCPCommandSet.Services.Datums
                 }
             }
 
-            result["grids"] = gridResults;
+            result["gridsProcessed"] = processed;
+            result["bubblesChanged"] = bubblesChanged;
+            result["extentsChanged"] = extentsChanged;
+            if (verbose)
+            {
+                result["grids"] = gridResults;
+            }
+            else
+            {
+                if (parallelSkipped.Count > 0)
+                    result["parallelSkipped"] = parallelSkipped;
+                if (differing.Count > 0)
+                    result["grids"] = differing;
+            }
+
             if (notVisible.Count > 0)
                 result["notVisible"] = notVisible;
             if (skipped.Count > 0)
