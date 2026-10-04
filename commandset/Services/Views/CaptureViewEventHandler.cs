@@ -114,6 +114,11 @@ namespace RevitMCPCommandSet.Services.Views
             if (file == null)
                 return Fail("Revit did not write the capture image.");
 
+            // A remote MCP server cannot read this PC's disk, so it asks for the PNG inline
+            var imageBase64 = (parameters.Value<bool?>("includeImage") ?? false)
+                ? Convert.ToBase64String(File.ReadAllBytes(file))
+                : null;
+
             return Ok($"Captured '{active.Name}'{(zoomed ? " (zoomed to fit)" : "")}.", new
             {
                 viewId = active.Id.GetValue(),
@@ -124,7 +129,8 @@ namespace RevitMCPCommandSet.Services.Views
                     : active.Scale,
                 zoomedToFit = zoomed,
                 restoredActiveView = willRestore,
-                file
+                file,
+                imageBase64
             });
         }
     }

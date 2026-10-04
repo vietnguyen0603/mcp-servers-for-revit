@@ -4,6 +4,7 @@ using RevitMCPSDK.API.Utils;
 using revit_mcp_plugin.Configuration;
 using revit_mcp_plugin.Utils;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
@@ -49,6 +50,20 @@ namespace revit_mcp_plugin.Core
             string currentVersion = _versionAdapter.GetRevitVersion();
             _logger.Info("Current Revit version: {0}", currentVersion);
 
+            // A command set kept up to date by the office MCP server replaces
+            // the per-PC Settings selection (see CommandSetUpdater).
+            var updater = new CommandSetUpdater(
+                PathManager.GetAppDataDirectoryPath(),
+                PathManager.GetCommandsDirectoryPath(),
+                message => _logger.Info("{0}", message));
+            ManagedCommandSet managed = updater.EnsureLatest(currentVersion);
+            if (managed != null)
+            {
+                LoadManagedCommands(managed);
+                _logger.Info("Command loading complete.");
+                return;
+            }
+
             // Load external commands from the configuration file.
             foreach (var commandConfig in _configManager.Config.Commands)
             {
@@ -88,6 +103,68 @@ namespace revit_mcp_plugin.Core
         }
 
         /// <summary>
+        /// Registers every command listed in a managed command set's command.json.
+        /// </summary>
+        private void LoadManagedCommands(ManagedCommandSet managed)
+        {
+            _logger.Info("Loading managed command set {0} from {1}", managed.Version, managed.Directory);
+            try
+            {
+                var wanted = new HashSet<string>(managed.CommandNames);
+                Assembly assembly = Assembly.LoadFrom(managed.AssemblyPath);
+                foreach (Type type in assembly.GetTypes())
+                {
+                    if (!IsCommandType(type))
+                        continue;
+                    try
+                    {
+                        IRevitCommand command = CreateCommand(type);
+                        if (wanted.Remove(command.CommandName))
+                        {
+                            _commandRegistry.RegisterCommand(command);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("Failed to create command instance [{0}]: {1}", type.FullName, ex.Message);
+                    }
+                }
+
+                _logger.Info("Registered {0} managed commands.", managed.CommandNames.Count - wanted.Count);
+                foreach (var missing in wanted)
+                {
+                    _logger.Warning("Command {0} is listed in command.json but not found in the assembly.", missing);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Failed to load managed command set: {0}", ex.Message);
+            }
+        }
+
+        private static bool IsCommandType(Type type)
+        {
+            return typeof(IRevitCommand).IsAssignableFrom(type) && !type.IsInterface && !type.IsAbstract;
+        }
+
+        private IRevitCommand CreateCommand(Type type)
+        {
+            // Check whether the command implements the initializable interface.
+            if (typeof(IRevitCommandInitializable).IsAssignableFrom(type))
+            {
+                var command = (IRevitCommand)Activator.CreateInstance(type);
+                ((IRevitCommandInitializable)command).Initialize(_uiApplication);
+                return command;
+            }
+
+            // Try searching for constructors that accept UIApplication, else use a parameterless constructor.
+            var constructor = type.GetConstructor(new[] { typeof(UIApplication) });
+            return constructor != null
+                ? (IRevitCommand)constructor.Invoke(new object[] { _uiApplication })
+                : (IRevitCommand)Activator.CreateInstance(type);
+        }
+
+        /// <summary>
         /// Loads specific commands in specific assemblies.
         /// </summary>
         /// <param name="config">Configuration class describing the command.</param>
@@ -116,36 +193,11 @@ namespace revit_mcp_plugin.Core
                 // Find types that implement the IRevitCommand interface.
                 foreach (Type type in assembly.GetTypes())
                 {
-                    if (typeof(RevitMCPSDK.API.Interfaces.IRevitCommand).IsAssignableFrom(type) &&
-                        !type.IsInterface &&
-                        !type.IsAbstract)
+                    if (IsCommandType(type))
                     {
                         try
                         {
-                            // Create a command instance.
-                            RevitMCPSDK.API.Interfaces.IRevitCommand command;
-
-                            // Check whether the command implements the initializable interface.
-                            if (typeof(IRevitCommandInitializable).IsAssignableFrom(type))
-                            {
-                                // Create instance and initialize.
-                                command = (IRevitCommand)Activator.CreateInstance(type);
-                                ((IRevitCommandInitializable)command).Initialize(_uiApplication);
-                            }
-                            else
-                            {
-                                // Try searching for constructors that accept UIApplication.
-                                var constructor = type.GetConstructor(new[] { typeof(UIApplication) });
-                                if (constructor != null)
-                                {
-                                    command = (IRevitCommand)constructor.Invoke(new object[] { _uiApplication });
-                                }
-                                else
-                                {
-                                    // Use a parameterless constructor.
-                                    command = (IRevitCommand)Activator.CreateInstance(type);
-                                }
-                            }
+                            IRevitCommand command = CreateCommand(type);
 
                             // Check whether the command name matches the configuration.
                             if (command.CommandName == config.CommandName)

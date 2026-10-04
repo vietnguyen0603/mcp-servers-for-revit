@@ -113,9 +113,14 @@ export class RevitClientConnection {
           try {
             const response = JSON.parse(responseData);
             if (response.error) {
-              reject(
-                new Error(response.error.message || "Unknown error from Revit")
-              );
+              let message = response.error.message || "Unknown error from Revit";
+              // JSON-RPC "method not found": this Revit runs an older command set
+              if (response.error.code === -32601) {
+                message +=
+                  ". This Revit's command set does not have this command yet, or it is disabled in Settings. " +
+                  "Restart Revit and click 'Revit MCP Switch' to load the latest command set.";
+              }
+              reject(new Error(message));
             } else {
               resolve(response.result);
             }

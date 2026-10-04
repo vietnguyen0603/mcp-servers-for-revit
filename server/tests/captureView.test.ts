@@ -32,10 +32,27 @@ describe("capture_view", () => {
       isError?: boolean;
     };
 
-    expect(sendCommand).toHaveBeenCalledWith("capture_view", { zoomToFit: true, pixelSize: 1600 });
+    expect(sendCommand).toHaveBeenCalledWith("capture_view", { zoomToFit: true, pixelSize: 1600, includeImage: true });
     expect(result.isError).toBeUndefined();
     expect(result.content[0]).toEqual({ type: "image", data: "iVBORw==", mimeType: "image/png" });
     expect(result.content[1].type).toBe("text");
+  });
+
+  it("uses the inline PNG from the plugin without reading the file", async () => {
+    sendCommand.mockResolvedValue({
+      Success: true,
+      Message: "Captured",
+      Response: { file: "C:\\on\\another\\pc.png", imageBase64: "iVBORw==", viewId: 7 },
+    });
+
+    const result = (await setup().invoke({})) as unknown as {
+      content: Array<{ type: string; data?: string; text?: string }>;
+      isError?: boolean;
+    };
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]).toEqual({ type: "image", data: "iVBORw==", mimeType: "image/png" });
+    expect(result.content[1].text).not.toContain("imageBase64");
   });
 
   it("flags Revit failures as errors without reading a file", async () => {
@@ -53,6 +70,7 @@ describe("capture_view", () => {
       zoomToFit: true,
       pixelSize: 1600,
       restoreActiveView: true,
+      includeImage: true,
     });
     expect(() => setup().parse({ restoreActiveView: "yes" })).toThrow();
   });

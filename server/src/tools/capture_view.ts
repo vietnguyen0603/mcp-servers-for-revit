@@ -10,8 +10,8 @@ interface CaptureResult {
   Success?: boolean;
   message?: string;
   Message?: string;
-  response?: { file?: string };
-  Response?: { file?: string };
+  response?: { file?: string; imageBase64?: string | null };
+  Response?: { file?: string; imageBase64?: string | null };
 }
 
 export function registerCaptureViewTool(server: McpServer) {
@@ -43,7 +43,7 @@ export function registerCaptureViewTool(server: McpServer) {
       let result: CaptureResult;
       try {
         result = (await withRevitConnection((revitClient) =>
-          revitClient.sendCommand("capture_view", args)
+          revitClient.sendCommand("capture_view", { ...args, includeImage: true })
         )) as CaptureResult;
       } catch (error) {
         return {
@@ -52,14 +52,22 @@ export function registerCaptureViewTool(server: McpServer) {
         };
       }
 
+      // The plugin returns the PNG inline (needed when this server runs on
+      // another machine); older plugins only return the file path
+      const payload = result?.response ?? result?.Response;
+      const inline = payload?.imageBase64;
+      if (payload) delete payload.imageBase64;
       const summary = { type: "text" as const, text: JSON.stringify(result, null, 2) };
-      const file = (result?.response ?? result?.Response)?.file;
-      if ((result?.success ?? result?.Success) === false || !file) {
+      const file = payload?.file;
+      if ((result?.success ?? result?.Success) === false || (!file && !inline)) {
         return { content: [summary], isError: true };
+      }
+      if (inline) {
+        return { content: [{ type: "image" as const, data: inline, mimeType: "image/png" }, summary] };
       }
 
       try {
-        const data = (await fs.readFile(file)).toString("base64");
+        const data = (await fs.readFile(file!)).toString("base64");
         return { content: [{ type: "image" as const, data, mimeType: "image/png" }, summary] };
       } catch (error) {
         return {
