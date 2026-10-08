@@ -156,7 +156,7 @@ namespace RevitMCPCommandSet.Services.DataExtraction.Register
         {
             if (long.TryParse(phaseId, out var numeric))
             {
-                var id = new ElementId(numeric);
+                var id = numeric.ToRevitElementId();
                 return new FilteredElementCollector(document).OfClass(typeof(Phase))
                     .Cast<Phase>().FirstOrDefault(p => p.Id == id);
             }

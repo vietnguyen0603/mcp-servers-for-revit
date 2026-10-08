@@ -87,7 +87,7 @@ namespace RevitMCPCommandSet.Services.DataExtraction.Register
         {
             if (long.TryParse(viewId, out var numeric))
             {
-                var id = new ElementId(numeric);
+                var id = numeric.ToRevitElementId();
                 var element = doc.GetElement(id);
                 if (element is View v) return v;
             }
