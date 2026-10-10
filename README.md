@@ -166,6 +166,8 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_level` | architecture, structure | Create levels at specified elevations |
 | `create_grids` | structure, architecture | Create named grids from lines, arcs or an irregular axes table |
 | `modify_levels` | structure, architecture | Rename/move levels, set Building Story, add missing structural/floor plans |
+| `create_offset_levels` | structure, architecture | Create levels offset from source levels (e.g. TOP PLATE 1' below each floor) with matching extents |
+| `set_wall_top_levels` | modify, structure, architecture | Re-constrain wall tops to another level (e.g. interior walls to TOP PLATE), with dry run |
 | `create_room` | architecture | Create and place rooms at specified locations |
 | `create_dimensions` | annotate | Create dimension annotations in the current view |
 | `create_structural_framing_system` | structure | Create a structural beam framing system |

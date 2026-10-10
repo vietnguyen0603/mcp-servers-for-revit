@@ -81,7 +81,7 @@ namespace RevitMCPCommandSet.Services.Datums
             };
         }
 
-        private static Level ResolveLevel(Document doc, JObject item)
+        internal static Level ResolveLevel(Document doc, JObject item)
         {
             var id = DocumentationUtils.ReadId(item, "levelId");
             if (id != null)
@@ -101,7 +101,7 @@ namespace RevitMCPCommandSet.Services.Datums
         }
 
         /// <summary>Creates a plan of the given family for the level unless one already exists; returns the new view or null.</summary>
-        private static ViewPlan EnsurePlan(Document doc, Level level, ViewFamily family, ViewType viewType)
+        internal static ViewPlan EnsurePlan(Document doc, Level level, ViewFamily family, ViewType viewType)
         {
             var exists = new FilteredElementCollector(doc).OfClass(typeof(ViewPlan)).Cast<ViewPlan>()
                 .Any(v => !v.IsTemplate && v.ViewType == viewType && v.GenLevel != null && v.GenLevel.Id == level.Id);

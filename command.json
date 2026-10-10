@@ -394,6 +394,16 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "create_offset_levels",
+      "description": "Create levels offset from source levels (e.g. TOP PLATE) with matching type, extents and bubbles",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "set_wall_top_levels",
+      "description": "Re-constrain wall tops from one level to another (explicit pairs or suffix), with dry run",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "get_document_info",
       "description": "Active document title, path, units, active view, levels and open documents",
       "assemblyPath": "RevitMCPCommandSet.dll"

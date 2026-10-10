@@ -119,6 +119,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["parameter", "bulk", "mark", "comments", "expression", "template", "compose", "tag text", "label", "type parameter", "csv"],
   },
+  set_wall_top_levels: {
+    catalogs: ["modify", "structure", "architecture"],
+    readOnly: false,
+    keywords: ["wall", "top constraint", "top plate", "below floor", "interior wall", "level", "retarget", "height"],
+  },
   probe_tag_types: {
     catalogs: ["annotate"],
     readOnly: true,
@@ -208,6 +213,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     catalogs: ["structure", "architecture"],
     readOnly: false,
     keywords: ["datum", "level", "rename", "elevation", "storey", "building story", "structural plan", "floor plan"],
+  },
+  create_offset_levels: {
+    catalogs: ["structure", "architecture"],
+    readOnly: false,
+    keywords: ["datum", "level", "top plate", "offset", "below floor", "extents", "bubble", "elevation"],
   },
   create_room: { catalogs: ["architecture"], readOnly: false, keywords: ["space"] },
   create_structural_framing_system: {

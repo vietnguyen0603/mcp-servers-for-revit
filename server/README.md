@@ -82,6 +82,8 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_foundations` | structure | Create isolated footings, piles (under caps by mark) and polygonal pile caps in bulk (CSV/JSON files) |
 | `create_grid` | architecture, structure | Create a grid system with smart spacing generation |
 | `create_level` | architecture, structure | Create levels at specified elevations |
+| `create_offset_levels` | structure, architecture | Create levels offset from source levels (e.g. TOP PLATE 1' below each floor) with matching extents |
+| `set_wall_top_levels` | modify, structure, architecture | Re-constrain wall tops to another level (e.g. interior walls to TOP PLATE), with dry run |
 | `create_room` | architecture | Create and place rooms at specified locations |
 | `create_dimensions` | annotate | Create dimension annotations in the current view |
 | `create_structural_framing_system` | structure | Create a structural beam framing system |
