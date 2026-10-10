@@ -119,7 +119,7 @@ namespace RevitMCPCommandSet.Services.Framing
             return result;
         }
 
-        private static ZJustification ParseZJustification(string value)
+        internal static ZJustification ParseZJustification(string value)
         {
             switch ((value ?? "top").Trim().ToLowerInvariant())
             {
@@ -131,7 +131,7 @@ namespace RevitMCPCommandSet.Services.Framing
             }
         }
 
-        private static YJustification? ParseYJustification(string value)
+        internal static YJustification? ParseYJustification(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;
@@ -145,7 +145,7 @@ namespace RevitMCPCommandSet.Services.Framing
             }
         }
 
-        private static StructuralInstanceUsage? ParseUsage(string value)
+        internal static StructuralInstanceUsage? ParseUsage(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return null;

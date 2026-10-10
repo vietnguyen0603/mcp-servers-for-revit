@@ -419,6 +419,16 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "modify_structural_members",
+      "description": "Edit placed framing/columns by filter: type, structural usage, offsets, levels, justification, mark/comments",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "summarize_structural_members",
+      "description": "Group placed framing/columns by comments, mark, type, usage or level with counts and elevation ranges",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_slabs",
       "description": "Create floors and foundation slabs with openings, offsets, slope arrows, zones and drop panels",
       "assemblyPath": "RevitMCPCommandSet.dll"

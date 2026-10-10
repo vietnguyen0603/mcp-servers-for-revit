@@ -235,6 +235,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["beam", "girder", "joist", "framing", "steel beam", "bulk", "csv", "justification"],
   },
+  modify_structural_members: {
+    catalogs: ["structure", "modify"],
+    readOnly: false,
+    keywords: ["beam", "column", "girder", "header", "post", "change type", "swap type", "structural usage", "offset", "top level", "justification", "framing"],
+  },
+  summarize_structural_members: {
+    catalogs: ["structure"],
+    readOnly: true,
+    keywords: ["beam", "column", "girder", "count", "verify", "check", "quantities", "elevation", "framing", "schedule"],
+  },
   get_grid_register_data: { catalogs: ["structure"], readOnly: true, keywords: ["register", "schedule", "axis"] },
   get_column_wall_register_data: {
     catalogs: ["structure"],
