@@ -16,7 +16,8 @@
         "build": "tsc",
         "test": "vitest run",
         "test:watch": "vitest",
-        "prepublishOnly": "npm run build"
+        "prepublishOnly": "npm run build",
+        "build:exe": "bun scripts/build-exe.ts"
     },
     "files": [
         "build",

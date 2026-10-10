@@ -19,15 +19,13 @@ export async function registerTools(
   const catalog = new ToolCatalog(server);
   const capturingServer = catalog.capturingServer();
 
-  // Get the directory of the current file
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-
-  // Read all files in the tools directory
-  const files = fs.readdirSync(__dirname);
+  // The single-exe build (scripts/build-exe.ts) has no tools directory to scan,
+  // so its entry point hands over the statically imported tool modules instead
+  const bundled = (globalThis as { __REVIT_TOOL_MODULES__?: Record<string, Record<string, unknown>> })
+    .__REVIT_TOOL_MODULES__;
 
   // Keep .ts or .js files, excluding the index and register files
-  const toolFiles = files.filter(
+  const toolFiles = (bundled ? Object.keys(bundled) : fs.readdirSync(path.dirname(fileURLToPath(import.meta.url)))).filter(
     (file) =>
       (file.endsWith(".ts") || file.endsWith(".js")) &&
       file !== "index.ts" &&
@@ -39,11 +37,8 @@ export async function registerTools(
   // Dynamically import and register each tool
   for (const file of toolFiles) {
     try {
-      // Build the import path
-      const importPath = `./${file.replace(/\.(ts|js)$/, ".js")}`;
-
       // Dynamically import the module
-      const module = await import(importPath);
+      const module = bundled?.[file] ?? (await import(`./${file.replace(/\.(ts|js)$/, ".js")}`));
 
       // Find and call the register function
       const registerFunctionName = Object.keys(module).find(
