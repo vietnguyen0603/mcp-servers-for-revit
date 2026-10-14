@@ -51,29 +51,60 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     // Copy in place, then give each copy its own curve (line-based items and detail lines).
                     if (elements.Count != 1)
                         throw new ArgumentException("copy with 'curve' or 'copyTo' takes exactly one element.");
+                    // Each entry runs in its own sub-transaction: a bad entry is reported, the others stay.
+                    // A line copied onto an arc spec (or back) becomes a new curve with the source's style.
                     var source = elements[0];
-                    var placed = new List<object>();
+                    var placed = new List<JObject>();
                     var newIds = new List<long>();
                     for (var i = 0; i < targets.Count; i++)
                     {
-                        var copy = CopyInPlace(doc, source);
-                        newIds.Add(copy.Id.GetValue());
-                        placed.Add(DetailGeometry.ApplyCurve(doc, copy, targets[i], targets.Count == 1 ? "curve" : $"copyTo[{i}]"));
+                        var what = targets.Count == 1 ? "curve" : $"copyTo[{i}]";
+                        var entry = RunEntry(doc, () =>
+                        {
+                            var copy = CopyInPlace(doc, source);
+                            var described = DetailGeometry.ApplyCurve(doc, copy, targets[i], what, out var final);
+                            newIds.Add(final.Id.GetValue());
+                            return described;
+                        });
+                        entry.AddFirst(new JProperty("index", i));
+                        placed.Add(entry);
                     }
+
+                    var failed = placed.Count(p => !p.Value<bool>("success"));
+                    if (failed == placed.Count)
+                        throw new ArgumentException(string.Join(" ", placed.Select(p => $"{(targets.Count == 1 ? "curve" : $"copyTo[{p.Value<int>("index")}]")}: {p.Value<string>("message")}")));
 
                     return new
                     {
                         action,
                         elementIds = ids.Select(i => i.GetValue()),
                         newIds,
+                        failed,
                         copies = placed
                     };
                 }
 
                 case "setCurve":
                 {
-                    var updated = elements.Select(e => DetailGeometry.ApplyCurve(doc, e, op, "setCurve")).ToList();
-                    return new { action, elementIds = ids.Select(i => i.GetValue()), curves = updated };
+                    // Line to arc (or back) replaces a detail/model line with a new one in the same style.
+                    var updated = new List<object>();
+                    var idMap = new Dictionary<string, long>();
+                    var resultIds = new List<long>();
+                    foreach (var e in elements)
+                    {
+                        updated.Add(DetailGeometry.ApplyCurve(doc, e, op, "setCurve", out var final));
+                        resultIds.Add(final.Id.GetValue());
+                        if (final.Id != e.Id)
+                            idMap[e.Id.GetValue().ToString()] = final.Id.GetValue();
+                    }
+
+                    return new
+                    {
+                        action,
+                        elementIds = resultIds,
+                        replaced = idMap.Count > 0 ? idMap : null,
+                        curves = updated
+                    };
                 }
 
                 case "rotate":
@@ -263,6 +294,26 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             }
 
             return null;
+        }
+
+        /// <summary>Runs one batch entry in a nested sub-transaction; returns {success, ...} or {success:false, message}.</summary>
+        private static JObject RunEntry(Document doc, Func<object> action)
+        {
+            var sub = new SubTransaction(doc);
+            sub.Start();
+            try
+            {
+                var result = JObject.FromObject(action() ?? new object());
+                sub.Commit();
+                result.AddFirst(new JProperty("success", true));
+                return result;
+            }
+            catch (Exception ex)
+            {
+                if (sub.HasStarted())
+                    sub.RollBack();
+                return new JObject { ["success"] = false, ["message"] = ex.Message };
+            }
         }
 
         /// <summary>Copies one element in place (zero translation) and returns the copy of the same kind.</summary>

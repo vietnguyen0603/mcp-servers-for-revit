@@ -262,8 +262,9 @@ namespace RevitMCPCommandSet.Services.Cad
             {
                 if (!entry.Key.IsMatch(layer))
                     continue;
-                if (styles.TryGetValue(entry.Value ?? "", out var mapped))
-                    return new StyleChoice { Style = mapped, Source = "map" };
+                var actual = DetailGeometry.MatchLineStyleName(styles.Keys, entry.Value);
+                if (actual != null)
+                    return new StyleChoice { Style = styles[actual], Source = "map" };
                 warnings.Add($"Line style '{entry.Value}' (mapped from layer '{layer}') not found.");
                 break;
             }

@@ -361,8 +361,10 @@ namespace RevitMCPCommandSet.Services.Library
                             kept.Add(sheet.SheetNumber + " (deleteEmptySheets=false)");
                         else if (sheet.Id == activeId)
                             kept.Add(sheet.SheetNumber + " (active view)");
-                        else if (sheet.GetAllViewports().Count > 0 || others > 0)
-                            kept.Add($"{sheet.SheetNumber} ({others} other elements)");
+                        else if (sheet.GetAllViewports().Count > 0)
+                            kept.Add($"{sheet.SheetNumber} ({sheet.GetAllViewports().Count} viewports)");
+                        else if (others.Count > 0)
+                            kept.Add($"{sheet.SheetNumber} ({others.Count} other elements: {DescribeContent(others)})");
                         else
                         {
                             var number = sheet.SheetNumber;
@@ -545,13 +547,38 @@ namespace RevitMCPCommandSet.Services.Library
         }
 
         /// <summary>Elements owned by the sheet other than viewports and title blocks.</summary>
-        private static int OtherContent(Document doc, ViewSheet sheet)
+        /// <summary>
+        ///     Sheet-owned elements that are real content (notes, lines, clouds, schedules, ...). Not content:
+        ///     viewports, the title block and anything nested in it, the title block's own revision schedule,
+        ///     and uncategorised internal elements Revit keeps on every sheet.
+        /// </summary>
+        private static List<Element> OtherContent(Document doc, ViewSheet sheet)
         {
             return new FilteredElementCollector(doc, sheet.Id)
                 .WhereElementIsNotElementType()
                 .ToElements()
-                .Count(e => e != null && e.Id != sheet.Id && !(e is Viewport)
-                            && !DocumentationUtils.IsCategory(e, BuiltInCategory.OST_TitleBlocks));
+                .Where(e => e != null && e.Id != sheet.Id && IsSheetContent(e))
+                .ToList();
+        }
+
+        private static bool IsSheetContent(Element e)
+        {
+            if (e is Viewport || e.Category == null || e is ViewSheet)
+                return false;
+            if (DocumentationUtils.IsCategory(e, BuiltInCategory.OST_TitleBlocks))
+                return false;
+            if (e is ScheduleSheetInstance schedule && schedule.IsTitleblockRevisionSchedule)
+                return false;
+            if (e is FamilyInstance instance && instance.SuperComponent != null)
+                return false; // nested in the title block (or another family): goes with its host
+            return true;
+        }
+
+        private static string DescribeContent(List<Element> others)
+        {
+            return string.Join(", ", others
+                .GroupBy(e => e.Category?.Name ?? e.GetType().Name)
+                .Select(g => $"{g.Count()} {g.Key}"));
         }
 
         // ---------------------------------------------------------------- verify

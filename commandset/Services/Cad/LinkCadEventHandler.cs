@@ -115,8 +115,19 @@ namespace RevitMCPCommandSet.Services.Cad
                     warnings.Add("'placementLevel' ignored: a current-view-only import belongs to its view.");
                 }
 
-                if (parameters.Value<bool?>("pin") ?? true)
-                    instance.Pinned = true;
+                // Revit pins origin/shared-positioned links on creation, so set the state both ways.
+                var pin = parameters.Value<bool?>("pin") ?? true;
+                if (instance.Pinned != pin)
+                {
+                    try
+                    {
+                        instance.Pinned = pin;
+                    }
+                    catch (Exception ex)
+                    {
+                        warnings.Add($"Could not {(pin ? "pin" : "unpin")} the instance: {ex.Message}");
+                    }
+                }
 
                 if (hideLayers != null)
                 {

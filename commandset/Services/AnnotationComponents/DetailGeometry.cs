@@ -229,20 +229,54 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             return new List<XYZ> { min, min + width, min + width + height, min + height };
         }
 
-        /// <summary>Line style (GraphicsStyle) by name among the subcategories of Lines.</summary>
+        /// <summary>
+        ///     Line style (GraphicsStyle) by name among the subcategories of Lines; throws when missing.
+        ///     Matching: exact, then case-insensitive, then ignoring angle brackets ("Medium Lines" = "&lt;Medium Lines&gt;").
+        /// </summary>
         public static GraphicsStyle ResolveLineStyle(Document doc, string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 return null;
-            var lines = Category.GetCategory(doc, BuiltInCategory.OST_Lines);
-            foreach (Category sub in lines.SubCategories)
-            {
-                if (string.Equals(sub.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
-                    return sub.GetGraphicsStyle(GraphicsStyleType.Projection);
-            }
+            return FindLineStyle(doc, name)
+                   ?? throw new ArgumentException(
+                       $"Line style '{name}' not found. Available: {string.Join(", ", LineStyleNames(doc))}.");
+        }
 
-            throw new ArgumentException(
-                $"Line style '{name}' not found. Available: {string.Join(", ", LineStyleNames(doc))}.");
+        /// <summary>As <see cref="ResolveLineStyle" /> but returns null when no style matches.</summary>
+        public static GraphicsStyle FindLineStyle(Document doc, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+            var lines = Category.GetCategory(doc, BuiltInCategory.OST_Lines);
+            var subs = lines.SubCategories.Cast<Category>().ToList();
+            var actual = MatchLineStyleName(subs.Select(c => c.Name), name);
+            return actual == null
+                ? null
+                : subs.First(c => c.Name == actual).GetGraphicsStyle(GraphicsStyleType.Projection);
+        }
+
+        /// <summary>
+        ///     The entry of <paramref name="names" /> matching <paramref name="name" />: exact, then
+        ///     case-insensitive, then case-insensitive ignoring surrounding angle brackets; null if none.
+        /// </summary>
+        public static string MatchLineStyleName(IEnumerable<string> names, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+            var list = names.Where(n => n != null).ToList();
+            var wanted = name.Trim();
+            var bare = StripBrackets(wanted);
+            return list.FirstOrDefault(n => string.Equals(n, wanted, StringComparison.Ordinal))
+                   ?? list.FirstOrDefault(n => string.Equals(n, wanted, StringComparison.OrdinalIgnoreCase))
+                   ?? list.FirstOrDefault(n => string.Equals(StripBrackets(n), bare, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string StripBrackets(string name)
+        {
+            var s = name.Trim();
+            if (s.StartsWith("<") && s.EndsWith(">") && s.Length >= 2)
+                s = s.Substring(1, s.Length - 2).Trim();
+            return s;
         }
 
         public static List<string> LineStyleNames(Document doc)
@@ -296,6 +330,18 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
         /// </summary>
         public static object ApplyCurve(Document doc, Element element, JToken spec, string what)
         {
+            return ApplyCurve(doc, element, spec, what, out _);
+        }
+
+        /// <summary>
+        ///     As <see cref="ApplyCurve(Document, Element, JToken, string)" />. A detail/model line whose
+        ///     curve kind changes (line to arc or back) cannot take SetGeometryCurve, so a new curve element
+        ///     is created with the same line style in the same view/sketch plane and the old one deleted;
+        ///     <paramref name="result" /> is the element now carrying the curve (the replacement or the input).
+        /// </summary>
+        public static object ApplyCurve(Document doc, Element element, JToken spec, string what, out Element result)
+        {
+            result = element;
             var view = doc.GetElement(element.OwnerViewId) as View;
             if (element is CurveElement curveElement)
             {
@@ -314,8 +360,25 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 }
 
                 var curve = ReadCurve(origin, normal, spec, what);
-                curveElement.SetGeometryCurve(curve, true);
-                return Describe(element, curve);
+                if (SameCurveKind(curveElement.GeometryCurve, curve))
+                {
+                    curveElement.SetGeometryCurve(curve, true);
+                    return Describe(element, curve);
+                }
+
+                var replacement = CreateCurveLike(doc, curveElement, curve);
+                var oldId = element.Id.GetValue();
+                doc.Delete(element.Id);
+                result = replacement;
+                return new
+                {
+                    elementId = replacement.Id.GetValue(),
+                    replacedId = oldId,
+                    start = DocumentationUtils.PointToMm(curve.GetEndPoint(0)),
+                    end = DocumentationUtils.PointToMm(curve.GetEndPoint(1)),
+                    curveType = curve is Arc ? "arc" : "line",
+                    length = DocumentationUtils.FeetToMm(curve.Length)
+                };
             }
 
             if (element.Location is LocationCurve location)
@@ -329,6 +392,59 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 
             throw new ArgumentException(
                 $"Element {element.Id.GetValue()} ({element.Category?.Name ?? element.GetType().Name}) is not a detail line or line-based item.");
+        }
+
+        private static bool SameCurveKind(Curve a, Curve b)
+        {
+            return a != null && b != null && a.GetType() == b.GetType();
+        }
+
+        /// <summary>
+        ///     New detail curve (same view) or model curve (same sketch plane) with the source's line style
+        ///     and comments, for curve-kind changes SetGeometryCurve rejects.
+        /// </summary>
+        private static CurveElement CreateCurveLike(Document doc, CurveElement source, Curve curve)
+        {
+            CurveElement created;
+            if (source is DetailCurve)
+            {
+                var view = doc.GetElement(source.OwnerViewId) as View
+                           ?? throw new ArgumentException($"Detail line {source.Id.GetValue()} has no owner view.");
+                created = doc.Create.NewDetailCurve(view, curve);
+            }
+            else if (source is ModelCurve
+                     && source.Category?.Id.GetValue() == (long)BuiltInCategory.OST_Lines)
+            {
+                var sketchPlane = source.SketchPlane
+                                  ?? throw new ArgumentException($"Model line {source.Id.GetValue()} has no sketch plane.");
+                created = doc.Create.NewModelCurve(curve, sketchPlane);
+            }
+            else
+            {
+                throw new ArgumentException(
+                    $"Element {source.Id.GetValue()} ({source.GetType().Name}) cannot change curve type " +
+                    $"({source.GeometryCurve?.GetType().Name} to {curve.GetType().Name}).");
+            }
+
+            var style = source.LineStyle as GraphicsStyle;
+            if (style != null)
+            {
+                try
+                {
+                    created.LineStyle = style;
+                }
+                catch (Exception)
+                {
+                    // Style not valid for the new curve: keep Revit's default.
+                }
+            }
+
+            var comments = source.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString();
+            var target = created.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
+            if (!string.IsNullOrEmpty(comments) && target != null && !target.IsReadOnly)
+                target.Set(comments);
+
+            return created;
         }
 
         private static object Describe(Element element, Curve curve)
