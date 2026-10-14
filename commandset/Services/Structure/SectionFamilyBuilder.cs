@@ -103,11 +103,15 @@ namespace RevitMCPCommandSet.Services.Structure
     ///         Framing (Metric Structural Framing - Beams and Braces.rft): the template's default geometry is
     ///         deleted, the section is drawn in the end elevation on the Member Left plane and extruded to Member
     ///         Right; the end faces are locked to Member Left/Right so the beam follows its placement line. The
-    ///         section top sits on the Ref. Level (or is centred on it when the template's own geometry was).
+    ///         section top sits on the Ref. Level (whatever the template's own beam did); circles and pipes are
+    ///         centred on it, polygons use their points as given. The reported sectionTop is measured from the solid.
     ///     </para>
     ///     <para>
     ///         Parametric sections get one reference plane per edge, locked to the solid's side faces and driven by
-    ///         labelled dimensions + EQ constraints. If that fails the family is rebuilt with fixed geometry.
+    ///         labelled dimensions + EQ constraints about the centre planes. Framing uses its own vertical centre
+    ///         plane (never a template plane: a template plane is already fixed, so EQ + depth label + a level lock
+    ///         overconstrain it) and only the top plane is locked to the Ref. Level. If that fails the family is
+    ///         rebuilt without the Ref. Level lock, then with fixed geometry.
     ///     </para>
     /// </summary>
     internal static class SectionFamilyBuilder
@@ -123,24 +127,46 @@ namespace RevitMCPCommandSet.Services.Structure
                 var attempt = new List<string>();
                 try
                 {
-                    var result = BuildOnce(app, template, path, familyName, spec, true, attempt);
+                    var result = BuildOnce(app, template, path, familyName, spec, true, true, attempt);
                     warnings.AddRange(attempt);
                     return result;
                 }
                 catch (Exception ex)
                 {
-                    warnings.Add("Parametric constraints failed (" + ex.Message + "); the family was rebuilt with fixed " +
-                                 "geometry, so its types cannot change the section - build one family per size.");
+                    if (spec.Kind != "framing")
+                    {
+                        warnings.Add("Parametric constraints failed (" + ex.Message + "); the family was rebuilt with fixed " +
+                                     "geometry, so its types cannot change the section - build one family per size.");
+                    }
+                    else
+                    {
+                        // Retry without locking the section top to the Ref. Level
+                        var retry = new List<string>();
+                        try
+                        {
+                            var result = BuildOnce(app, template, path, familyName, spec, true, false, retry);
+                            warnings.Add("Locking the section top to the Ref. Level failed (" + ex.Message + "); the family " +
+                                         "is parametric but the section is not held on the Ref. Level - check flexTest.topOnLevel.");
+                            warnings.AddRange(retry);
+                            return result;
+                        }
+                        catch (Exception ex2)
+                        {
+                            warnings.Add("Parametric constraints failed (" + ex.Message + "; without the Ref. Level lock: " +
+                                         ex2.Message + "); the family was rebuilt with fixed geometry, so its types cannot " +
+                                         "change the section - build one family per size.");
+                        }
+                    }
                 }
             }
 
-            return BuildOnce(app, template, path, familyName, spec, false, warnings);
+            return BuildOnce(app, template, path, familyName, spec, false, false, warnings);
         }
 
         // ------------------------------------------------------------------ build
 
         private static JObject BuildOnce(Autodesk.Revit.ApplicationServices.Application app, string template, string path,
-            string familyName, SectionFamilySpec spec, bool parametric, List<string> warnings)
+            string familyName, SectionFamilySpec spec, bool parametric, bool anchor, List<string> warnings)
         {
             var valuesFt = spec.Values.ToDictionary(x => x.Key, x => x.Value * MmToFeet);
             var pointsFt = spec.Points?.Select(x => new Point2(x.X * MmToFeet, x.Y * MmToFeet)).ToList();
@@ -162,7 +188,6 @@ namespace RevitMCPCommandSet.Services.Structure
                     if (fm.CurrentType == null) fm.NewType(familyName);
 
                     frame = spec.Kind == "column" ? Frame.Column(fdoc) : Frame.Framing(fdoc, profile, warnings);
-                    if (frame.Convention != null) result["sectionTop"] = frame.Convention;
 
                     extrusion = CreateExtrusion(fdoc, frame, profile);
                     fdoc.Regenerate();
@@ -170,7 +195,7 @@ namespace RevitMCPCommandSet.Services.Structure
 
                     if (parametric)
                     {
-                        result["facesLocked"] = Constrain(fdoc, frame, profile, extrusion, spec, warnings);
+                        result["facesLocked"] = Constrain(fdoc, frame, profile, extrusion, spec, anchor, warnings);
                     }
 
                     AddArea(fdoc, spec, profile, parametric, warnings);
@@ -178,6 +203,12 @@ namespace RevitMCPCommandSet.Services.Structure
                     if (t.Commit() != TransactionStatus.Committed)
                         throw new InvalidOperationException("Revit rolled the family back: " +
                                                             (errors.Count > 0 ? string.Join("; ", errors) : "unknown error"));
+                }
+
+                if (frame.Kind == "framing")
+                {
+                    result["sectionTop"] = SectionTop(frame, extrusion, profile);
+                    if (parametric) result["topLockedToLevel"] = frame.TopLocked;
                 }
 
                 AssociateMaterial(fdoc, extrusion, spec, warnings);
@@ -204,7 +235,7 @@ namespace RevitMCPCommandSet.Services.Structure
             public ReferencePlane CentreU, CentreV;
             public Level Level, Upper;
             public ReferencePlane MemberRight;
-            public string Convention;
+            public bool TopLocked;
 
             public XYZ At(double u, double v) => Origin + U * u + V * v;
 
@@ -262,18 +293,11 @@ namespace RevitMCPCommandSet.Services.Structure
                                 .OrderBy(l => Math.Abs(l.Elevation)).FirstOrDefault()
                             ?? throw new InvalidOperationException("The framing template has no Ref. Level.");
 
-                // Follow the template: its own beam is either hung below the Ref. Level or centred on it
-                var convention = "top";
-                var box = DeleteDefaultGeometry(fdoc);
-                if (box != null)
-                {
-                    if (Math.Abs(box.Max.Z - level.Elevation) < 1 * MmToFeet) convention = "top";
-                    else if (Math.Abs((box.Max.Z + box.Min.Z) / 2 - level.Elevation) < 1 * MmToFeet) convention = "centre";
-                    else warnings.Add("The template's default beam is neither top-aligned nor centred on the Ref. Level; the section top is put on the Ref. Level.");
-                }
-
-                var polygon = profile.Shape == SectionProfile.Polygon;
-                var zc = polygon || convention == "centre" ? level.Elevation : level.Elevation - profile.MaxV;
+                // Section top on the Ref. Level whatever the template's own (deleted) beam did. Circles are centred
+                // (a labelled diameter grows about the arc centre); polygons keep their own coordinates.
+                DeleteDefaultGeometry(fdoc);
+                var centred = profile.Shape == SectionProfile.Polygon || profile.CircleDiameters.Count > 0;
+                var zc = centred ? level.Elevation : level.Elevation - profile.MaxV;
                 var frame = new Frame
                 {
                     Kind = "framing",
@@ -287,8 +311,9 @@ namespace RevitMCPCommandSet.Services.Structure
                     StartRef = left.GetReference(),
                     EndRef = right.GetReference(),
                     CentreU = planes.FirstOrDefault(r => Math.Abs(r.Normal.Y) > 0.99 && Math.Abs(r.GetPlane().Origin.Y) < 1e-6),
-                    CentreV = planes.FirstOrDefault(r => Math.Abs(r.Normal.Z) > 0.99 && Math.Abs(r.GetPlane().Origin.Z - zc) < 1e-6),
-                    Convention = polygon ? "points relative to the Ref. Level" : convention
+                    // Always a new, free plane (Constrain creates it): the top lock + depth label hold the V planes and
+                    // the centre follows by EQ. A template plane here is already fixed, which overconstrains them.
+                    CentreV = null
                 };
                 if (frame.Length < 1e-3) throw new InvalidOperationException("Member Left and Member Right coincide.");
                 frame.ProfileView = Elevations(fdoc, XYZ.BasisX).FirstOrDefault()
@@ -414,7 +439,7 @@ namespace RevitMCPCommandSet.Services.Structure
 
         /// <summary>Reference planes per section edge, face locks, labelled dimensions and EQ constraints.</summary>
         private static int Constrain(Document fdoc, Frame frame, SectionProfile profile, Extrusion extrusion,
-            SectionFamilySpec spec, List<string> warnings)
+            SectionFamilySpec spec, bool anchorToLevel, List<string> warnings)
         {
             var fm = fdoc.FamilyManager;
             var view = frame.ProfileView;
@@ -502,24 +527,35 @@ namespace RevitMCPCommandSet.Services.Structure
                 dimension.AreSegmentsEqual = true;
             }
 
-            // Framing: hold the section on the Ref. Level (top or centre), otherwise it could float vertically
-            if (frame.Kind == "framing")
+            // Framing: hold the section top on the Ref. Level, otherwise it floats vertically. Only our own top plane
+            // is locked (one constraint); the other V planes follow from the labels and EQ.
+            if (frame.Kind == "framing" && anchorToLevel && profile.TopPlaneId != null)
             {
-                var anchor = frame.Convention == "centre" ? centreV : profile.TopPlaneId != null ? planes[profile.TopPlaneId] : null;
-                if (anchor != null)
+                try
                 {
-                    try
-                    {
-                        fdoc.FamilyCreate.NewAlignment(view, frame.Level.GetPlaneReference(), anchor.GetReference()).IsLocked = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        warnings.Add("The section is not locked to the Ref. Level: " + ex.Message);
-                    }
+                    fdoc.FamilyCreate.NewAlignment(view, frame.Level.GetPlaneReference(), planes[profile.TopPlaneId].GetReference())
+                        .IsLocked = true;
+                    frame.TopLocked = true;
+                }
+                catch (Exception ex)
+                {
+                    warnings.Add("The section top is not locked to the Ref. Level: " + ex.Message);
                 }
             }
 
             return locked;
+        }
+
+        /// <summary>Where the framing section actually sits relative to the Ref. Level, measured from the solid.</summary>
+        private static string SectionTop(Frame frame, Extrusion extrusion, SectionProfile profile)
+        {
+            if (profile.Shape == SectionProfile.Polygon) return "points relative to the Ref. Level";
+            var box = extrusion.get_BoundingBox(null);
+            if (box == null) return "unknown";
+            var level = frame.Level.Elevation;
+            if (Math.Abs(box.Max.Z - level) < 1 * MmToFeet) return "top";
+            if (Math.Abs((box.Max.Z + box.Min.Z) / 2 - level) < 1 * MmToFeet) return "centre";
+            return $"top at {Math.Round((box.Max.Z - level) / MmToFeet, 1)} mm from the Ref. Level";
         }
 
         private static string PlaneName(SectionFamilySpec spec, SectionPlane plane, Frame frame)
@@ -779,7 +815,16 @@ namespace RevitMCPCommandSet.Services.Structure
                     var uOk = Math.Abs(Extent(frame.U) - (expected.MaxU - expected.MinU)) <= Math.Max(1 * MmToFeet, (expected.MaxU - expected.MinU) * 0.005);
                     var vOk = Math.Abs(Extent(frame.V) - (expected.MaxV - expected.MinV)) <= Math.Max(1 * MmToFeet, (expected.MaxV - expected.MinV) * 0.005);
 
-                    result["ok"] = areaOk && lengthOk && uOk && vOk;
+                    var ok = areaOk && lengthOk && uOk && vOk;
+                    if (frame.Kind == "framing" && spec.Shape != SectionProfile.Polygon && expected.CircleDiameters.Count == 0)
+                    {
+                        // The section top must stay on the Ref. Level when the sizes change
+                        var topOnLevel = Math.Abs(box.Max.Z - frame.Level.Elevation) <= 1 * MmToFeet;
+                        result["topOnLevel"] = topOnLevel;
+                        ok = ok && topOnLevel;
+                    }
+
+                    result["ok"] = ok;
                     result["scale"] = scale;
                     result["expected"] = new JObject
                     {
