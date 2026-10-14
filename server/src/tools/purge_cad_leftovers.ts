@@ -9,7 +9,7 @@ export const purgeCadLeftoversShape = {
     .max(3)
     .optional()
     .describe(
-      "What to purge (default all): cadTypes = CAD import/link types without instances; filledRegionTypes / fillPatterns = imported ones matching namePatterns"
+      "What to purge (default [\"cadTypes\",\"filledRegionTypes\"]; fillPatterns is opt-in): cadTypes = CAD import/link types without instances; filledRegionTypes / fillPatterns = imported ones matching namePatterns"
     ),
   namePatterns: z
     .array(z.string().min(1).max(256))
@@ -27,7 +27,8 @@ export const purgeCadLeftoversShape = {
 export function registerPurgeCadLeftoversTool(server: McpServer) {
   server.tool(
     "purge_cad_leftovers",
-    'Clean up CAD import leftovers: delete CAD import/link types (CADLinkType) that have no instance, and imported filled region types and fill patterns named like "*.dwg-N" that are unused. ' +
+    'Clean up CAD import leftovers: delete CAD import/link types (CADLinkType) that have no instance, and imported filled region types (and, opt-in via include, fill patterns) named like "*.dwg-N" that are unused. ' +
+      "A fill pattern counts as used when a filled region type, a material, or a view/template filter or category (incl. subcategory) override references it; element-level graphic overrides are NOT checked. " +
       "Only unused types are deleted unless remapTo names a native filled region type, in which case regions on the matched types are switched to it first. Also reports duplicate groups (e.g. Concrete.dwg-1, Concrete.dwg-2, and whether a native 'Concrete' exists). " +
       "dryRun defaults to true: the purge is executed and rolled back so the report is exact; pass dryRun:false to apply in one undo step.",
     purgeCadLeftoversShape,

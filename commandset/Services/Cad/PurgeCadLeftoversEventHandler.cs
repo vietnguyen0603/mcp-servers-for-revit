@@ -27,7 +27,7 @@ namespace RevitMCPCommandSet.Services.Cad
             var dryRun = parameters.Value<bool?>("dryRun") ?? true;
             var include = new HashSet<string>(CadUtils.ReadStrings(parameters["include"]), StringComparer.OrdinalIgnoreCase);
             if (include.Count == 0)
-                include = new HashSet<string>(new[] { "cadTypes", "filledRegionTypes", "fillPatterns" }, StringComparer.OrdinalIgnoreCase);
+                include = new HashSet<string>(new[] { "cadTypes", "filledRegionTypes" }, StringComparer.OrdinalIgnoreCase);
             var patterns = CadUtils.ReadStrings(parameters["namePatterns"]);
             var matches = CadUtils.Matcher(patterns.Count > 0 ? patterns : DefaultPatterns);
 
@@ -126,7 +126,7 @@ namespace RevitMCPCommandSet.Services.Cad
                     {
                         if (used.Contains(pattern.Id.GetValue()))
                         {
-                            fillPatterns.Add(Entry(pattern, "kept", "used by a filled region type, material or view filter override"));
+                            fillPatterns.Add(Entry(pattern, "kept", "used by a filled region type, material, or view/template filter or category override (element overrides not checked)"));
                             continue;
                         }
 
@@ -233,6 +233,27 @@ namespace RevitMCPCommandSet.Services.Cad
                 Add(material.CutBackgroundPatternId);
             }
 
+            void AddOverrides(OverrideGraphicSettings overrides)
+            {
+                if (overrides == null)
+                    return;
+                Add(overrides.SurfaceForegroundPatternId);
+                Add(overrides.SurfaceBackgroundPatternId);
+                Add(overrides.CutForegroundPatternId);
+                Add(overrides.CutBackgroundPatternId);
+            }
+
+            // Model + annotation categories and their subcategories (V/G category overrides)
+            var categoryIds = new List<ElementId>();
+            foreach (Category category in doc.Settings.Categories)
+            {
+                categoryIds.Add(category.Id);
+                foreach (Category sub in category.SubCategories)
+                    categoryIds.Add(sub.Id);
+            }
+
+            // Views and view templates: filter and category overrides. Per-element
+            // overrides (View.GetElementOverrides) are not scanned - too costly.
             foreach (var view in new FilteredElementCollector(doc).OfClass(typeof(View)).Cast<View>())
             {
                 ICollection<ElementId> filters;
@@ -248,12 +269,18 @@ namespace RevitMCPCommandSet.Services.Cad
                 }
 
                 foreach (var filterId in filters)
+                    AddOverrides(view.GetFilterOverrides(filterId));
+
+                foreach (var categoryId in categoryIds)
                 {
-                    var overrides = view.GetFilterOverrides(filterId);
-                    Add(overrides.SurfaceForegroundPatternId);
-                    Add(overrides.SurfaceBackgroundPatternId);
-                    Add(overrides.CutForegroundPatternId);
-                    Add(overrides.CutBackgroundPatternId);
+                    try
+                    {
+                        AddOverrides(view.GetCategoryOverrides(categoryId));
+                    }
+                    catch (Exception)
+                    {
+                        // Category not overridable in this view
+                    }
                 }
             }
 
