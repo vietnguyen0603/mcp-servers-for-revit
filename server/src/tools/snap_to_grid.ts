@@ -49,6 +49,14 @@ export const snapToGridShape = {
     .optional()
     .default(5000)
     .describe("Only grids within this distance of the element are used as reference (default 5000 mm); axes with no grid in reach are left unchanged"),
+  wallMode: z
+    .enum(["run", "acrossOnly", "ends"])
+    .optional()
+    .default("run")
+    .describe(
+      "Walls only. run (default): joined / touching collinear walls form a run that snaps across as one line; joined ends are then rebuilt from the snapped lines so corners and T-junctions stay closed, and free ends snap along. " +
+        "acrossOnly: each straight wall shifts perpendicular to itself only (length and ends along the wall unchanged). ends: across plus each end along independently (as for beams; may open gaps at corners)"
+    ),
   dryRun: z
     .boolean()
     .optional()
@@ -60,7 +68,7 @@ export function registerSnapToGridTool(server: McpServer) {
   server.tool(
     "snap_to_grid",
     "Clean small position errors of extracted / traced models so drawings read round numbers (550 | 550 instead of 5 | 1095): for each selected element and each of its local plan axes, the offset from the nearest grid running across that axis is rounded to stepMm (default 50) and the element is moved by the difference when it is at most maxShiftMm (default 30). " +
-      "Point-based families (columns, footings, pile caps, piles) snap their insertion point along their own X/Y; straight walls and beams snap across their location line and each end point along it (beam/wall ends move, joins are kept where Revit allows). axes:'global' rounds X/Y coordinates instead. " +
+      "Point-based families (columns, footings, pile caps, piles) snap their insertion point along their own X/Y; straight beams snap across their location line and each end point along it. Walls follow wallMode: run (default) snaps each run of joined collinear walls across together and rebuilds joined corners from the snapped lines so they stay closed; acrossOnly only shifts walls perpendicular to themselves; ends snaps like beams. axes:'global' rounds X/Y coordinates instead. " +
       "dryRun defaults to true and reports per category the count, wouldMove, max/avg shift, elements whose offset exceeds maxShiftMm and samples (grid, offset, snapped value). Run it before dimension_elements / tag_elements. Pinned and grouped elements are skipped.",
     snapToGridShape,
     async (args) => sendDocumentationCommand("snap_to_grid", args, 600000)

@@ -11,7 +11,13 @@ const tag = z.object(tagElementsShape).strict();
 describe("snap_to_grid schema", () => {
   it("defaults to a 50 mm grid-relative dry run", () => {
     const parsed = snap.parse({ categories: ["StructuralColumns"] });
-    expect(parsed).toMatchObject({ axes: "grid", stepMm: 50, maxShiftMm: 30, maxGridDistanceMm: 5000, dryRun: true });
+    expect(parsed).toMatchObject({ axes: "grid", stepMm: 50, maxShiftMm: 30, maxGridDistanceMm: 5000, wallMode: "run", dryRun: true });
+  });
+
+  it("accepts the wall modes and rejects unknown ones", () => {
+    expect(snap.parse({ categories: ["Walls"], wallMode: "acrossOnly" }).wallMode).toBe("acrossOnly");
+    expect(snap.parse({ categories: ["Walls"], wallMode: "ends" }).wallMode).toBe("ends");
+    expect(() => snap.parse({ wallMode: "corners" })).toThrow();
   });
 
   it("accepts finer steps, levels, type filter and global axes", () => {

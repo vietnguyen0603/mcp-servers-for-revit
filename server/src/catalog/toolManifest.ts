@@ -250,6 +250,11 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["beam", "column", "girder", "header", "post", "change type", "swap type", "structural usage", "offset", "top level", "justification", "framing"],
   },
+  attach_columns: {
+    catalogs: ["structure", "modify"],
+    readOnly: false,
+    keywords: ["column", "attach top", "attach base", "detach", "column attachment", "beam", "floor", "roof", "post"],
+  },
   summarize_structural_members: {
     catalogs: ["structure"],
     readOnly: true,

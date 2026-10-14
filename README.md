@@ -176,6 +176,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_trusses` | structure | Place structural trusses along plan lines in bulk, with parallel arrays, bearing chord, height and chord/web types |
 | `create_member_array` | structure | Lay out purlins/girts between two bounding lines (spacing along the slope, boundary trim, slope rotation) as framing |
 | `modify_structural_members` | structure, modify | Edit placed beams/columns by filter: swap type, structural usage, offsets, levels, justification, mark/comments |
+| `attach_columns` | structure, modify | Attach/detach column tops and bases to beams, floors, roofs (auto-found above/below or by id), with justification, cut style and offset |
 | `summarize_structural_members` | structure | Group placed beams/columns by comments, mark, type, usage or level with counts and elevation ranges |
 | `delete_element` | modify | Delete elements by ID |
 | `operate_element` | modify | Operate on elements (select, setColor, hide, etc.) |

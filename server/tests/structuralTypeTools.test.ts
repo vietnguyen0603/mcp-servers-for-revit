@@ -40,6 +40,15 @@ describe("structural type tools", () => {
     expect(tool.description).toMatch(/millimetres/);
   });
 
+  it("forwards create_family_type strict at call and item level", async () => {
+    const tool = setup()("create_family_type");
+    const types = [{ familyName: "Concrete-Rectangular Beam", newName: "B 300x600", parameters: { b: 300, h: 600 }, strict: true }];
+    await tool.invoke({ types, strict: false });
+    expect(sendCommand).toHaveBeenCalledWith("create_family_type", { strict: false, types });
+    expect(tool.description).toMatch(/strict/);
+    expect(() => tool.parse({ types: [{ familyName: "F", newName: "X", strict: "yes" }] })).toThrow();
+  });
+
   it("requires a source and a name for create_family_type", () => {
     const tool = setup()("create_family_type");
     expect(() => tool.parse({ types: [{ newName: "X" }] })).toThrow();
