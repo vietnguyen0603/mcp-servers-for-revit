@@ -152,7 +152,7 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   create_family: {
     catalogs: ["structure", "architecture"],
     readOnly: false,
-    keywords: ["family", "rfa", "parametric", "template", "pile", "barrette", "bored pile", "custom family", "build family", "missing family"],
+    keywords: ["family", "rfa", "parametric", "template", "pile", "barrette", "bored pile", "custom family", "build family", "missing family", "column", "beam", "framing", "cruciform", "box girder", "built-up", "welded", "I hộp", "steel section", "hollow section", "pipe"],
   },
   create_openings: {
     catalogs: ["structure", "architecture"],

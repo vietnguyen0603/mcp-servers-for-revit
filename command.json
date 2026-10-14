@@ -530,7 +530,7 @@
     },
     {
       "commandName": "create_family",
-      "description": "Build a parametric extruded family (rectangular/circular, e.g. barrette or bored pile) from a template, load it and create types",
+      "description": "Build a parametric extruded family from a template, load it and create types: foundations (rectangular/circular, e.g. barrette or bored pile) or structural columns/framing with standard or built-up sections (I, box girder, cruciform, rect, circle, pipe, polygon)",
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
