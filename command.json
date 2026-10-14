@@ -379,6 +379,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "layout_detail_sheet_grid",
+      "description": "Measure, apply and verify the office 12-cell detail sheet grid across a sheet series",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "list_drafting_types",
       "description": "List text, dimension, filled region, line style, viewport and title block types",
       "assemblyPath": "RevitMCPCommandSet.dll"
