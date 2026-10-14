@@ -20,12 +20,13 @@ namespace RevitMCPCommandSet.Services.Structure
         {
             var doc = uiDoc.Document;
             var items = DocumentationUtils.RequireArray(parameters, "types");
-            var results = DocumentationUtils.RunBatch(doc, "MCP: Create Family Types", items, item => Create(doc, (JObject)item));
+            var strict = parameters.Value<bool?>("strict") ?? true;
+            var results = DocumentationUtils.RunBatch(doc, "MCP: Create Family Types", items, item => Create(doc, (JObject)item, strict));
             return Ok($"Created or updated {results.Count(r => r.Value<bool>("success"))} of {results.Count} types.",
                 DocumentationUtils.Summarize(results));
         }
 
-        private static object Create(Document doc, JObject item)
+        private static object Create(Document doc, JObject item, bool strictDefault)
         {
             var newName = item.Value<string>("newName");
             if (string.IsNullOrWhiteSpace(newName))
@@ -36,6 +37,18 @@ namespace RevitMCPCommandSet.Services.Structure
             var existing = FindSibling(doc, source, newName);
             if (existing != null && ifExists == "error")
                 throw new ArgumentException($"Type '{newName}' already exists (id {existing.Id.GetValue()}).");
+
+            // strict (default): unknown parameter names fail the item before anything is created
+            var strict = item.Value<bool?>("strict") ?? strictDefault;
+            if (strict && (existing == null || ifExists == "update") && item["parameters"] is JObject requested)
+            {
+                var probe = existing ?? source;
+                var missing = requested.Properties().Select(p => p.Name).Where(name => probe.LookupParameter(name) == null).ToList();
+                if (missing.Count > 0)
+                    throw new ArgumentException(
+                        $"Parameter(s) {string.Join(", ", missing.Select(m => "'" + m + "'"))} not found on '{TypeLabel(probe)}'; nothing was created. " +
+                        $"Available type parameters: {string.Join(", ", ParameterNames(probe))}. Pass strict:false to create the type anyway and only warn.");
+            }
 
             var created = existing == null;
             var type = existing ?? (ElementType)source.Duplicate(newName);
@@ -185,6 +198,17 @@ namespace RevitMCPCommandSet.Services.Structure
             structure.SetLayerWidth(core, coreWidth);
             host.SetCompoundStructure(structure);
         }
+
+        private static string TypeLabel(ElementType type) =>
+            ((type as FamilySymbol)?.FamilyName ?? type.FamilyName) + ": " + type.Name;
+
+        /// <summary>Names of the type's editable parameters, sorted, without duplicates.</summary>
+        private static IEnumerable<string> ParameterNames(ElementType type) =>
+            type.Parameters.Cast<Parameter>()
+                .Where(p => p.Definition != null && !p.IsReadOnly)
+                .Select(p => p.Definition.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
 
         private static JArray DescribeParameters(ElementType type)
         {

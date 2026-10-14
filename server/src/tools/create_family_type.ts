@@ -38,6 +38,10 @@ export const familyTypeItemSchema = z
       .optional()
       .describe("When newName already exists: update its parameters (default), reuse it unchanged, or fail"),
     listParameters: z.boolean().optional().describe("Return the type's editable parameters and values"),
+    strict: z
+      .boolean()
+      .optional()
+      .describe("Override the call-level strict for this item: false creates the type even when a parameter name is unknown (warning only)"),
   })
   .strict()
   .refine((t) => t.sourceTypeId !== undefined || t.familyName !== undefined || t.category !== undefined, {
@@ -50,15 +54,20 @@ export function registerCreateFamilyTypeTool(server: McpServer) {
   server.tool(
     "create_family_type",
     "Create sized types by duplicating an existing family or system type and setting its type parameters - the step every structural model needs before placing elements: welded/rolled steel sections (WWF: d, bf, tw, tf), concrete columns and beams (b, h), footings/pile caps (Width, Length, Foundation Thickness), piles, and floor/wall/roof thickness (thickness, mm). " +
-      "Lengths given as numbers are millimetres. Re-running with the same newName updates the existing type (idempotent). Each item reports typeId, applied parameters and warnings (unknown parameter names come back with the list of the type's parameters). Load the family first with load_family. " +
+      "Lengths given as numbers are millimetres. Re-running with the same newName updates the existing type (idempotent). Each item reports typeId, applied parameters and warnings. strict (default true): an item naming a parameter the type does not have fails before anything is created, and the error lists the type's parameters; strict:false creates the type anyway and only warns. Load the family first with load_family. " +
       "For hundreds of types pass a local dataFile (JSON/JSONL/CSV; in CSV put parameters as JSON text, e.g. a column parameters = {\"b\":300,\"h\":600}, or as dotted headers parameters.b, parameters.h). Sent in chunks of 300, one undo step per chunk.",
     {
       types: z.array(familyTypeItemSchema).min(1).max(500).optional().describe("Types to create or update"),
+      strict: z
+        .boolean()
+        .optional()
+        .describe("Default true: fail an item (nothing created) when any of its parameter names is not found on the type. false: create it and warn"),
       ...bulkInputShape,
     },
     async (args) =>
       runBulkCommand<FamilyTypeItem>("create_family_type", args, "types", {
         itemSchema: familyTypeItemSchema,
+        base: args.strict === undefined ? undefined : { strict: args.strict },
         jsonFields: ["parameters"],
         stringFields: ["newName", "familyName", "typeName", "category"],
         chunkSize: 300,

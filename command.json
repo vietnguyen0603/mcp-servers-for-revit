@@ -424,6 +424,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "attach_columns",
+      "description": "Attach/detach column tops and bases to beams, floors, roofs (auto-found above/below or by id)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "summarize_structural_members",
       "description": "Group placed framing/columns by comments, mark, type, usage or level with counts and elevation ranges",
       "assemblyPath": "RevitMCPCommandSet.dll"

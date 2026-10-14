@@ -5,6 +5,7 @@ vi.mock("../src/utils/ConnectionManager.js", async () =>
 );
 
 import { TOOL_MANIFEST } from "../src/catalog/toolManifest.js";
+import { registerAttachColumnsTool } from "../src/tools/attach_columns.js";
 import { registerModifyStructuralMembersTool } from "../src/tools/modify_structural_members.js";
 import { registerSummarizeStructuralMembersTool } from "../src/tools/summarize_structural_members.js";
 import { resetConnectionMock, sendCommand } from "./helpers/connectionMock.js";
@@ -14,6 +15,7 @@ function setup() {
   const { server, getTool } = createFakeMcpServer();
   registerModifyStructuralMembersTool(server);
   registerSummarizeStructuralMembersTool(server);
+  registerAttachColumnsTool(server);
   return getTool;
 }
 
@@ -77,5 +79,41 @@ describe("structural member tools", () => {
   it("lists both tools in the manifest, summarize as read-only", () => {
     expect(TOOL_MANIFEST.modify_structural_members.readOnly).toBe(false);
     expect(TOOL_MANIFEST.summarize_structural_members.readOnly).toBe(true);
+  });
+  it("forwards attach_columns with auto targets and defaults", async () => {
+    const tool = setup()("attach_columns");
+    await tool.invoke({ filter: { category: "columns", level: "L1" }, attachTop: {} });
+    expect(sendCommand.mock.calls[0][0]).toBe("attach_columns");
+    expect(sendCommand.mock.calls[0][1]).toEqual({
+      filter: { category: "columns", level: "L1" },
+      attachTop: { targets: "auto", justification: "minimum", cutStyle: "cutColumn", offsetMm: 0, searchRangeMm: 5000 },
+      detachTop: false,
+      detachBase: false,
+      dryRun: false,
+      maxElements: 2000,
+    });
+  });
+
+  it("accepts explicit targets and detaching the other end", () => {
+    const tool = setup()("attach_columns");
+    expect(() =>
+      tool.parse({
+        filter: { elementIds: [1001] },
+        attachBase: { targets: [2002, 2003], justification: "maximum", cutStyle: "none", offsetMm: -50, categories: ["framing"] },
+        detachTop: true,
+      })
+    ).not.toThrow();
+    expect(() => tool.parse({ filter: {}, attachTop: { targets: "nearest" } })).toThrow();
+    expect(() => tool.parse({ filter: {}, attachTop: { justification: "centre" } })).toThrow();
+    expect(() => tool.parse({ filter: {}, attachTop: { categories: ["walls"] } })).toThrow();
+  });
+
+  it("refuses attach_columns without an action, with attach+detach on one end, or without a filter", async () => {
+    const tool = setup()("attach_columns");
+    expect((await tool.invoke({ filter: { category: "columns" } })).isError).toBe(true);
+    expect((await tool.invoke({ filter: { category: "columns" }, attachTop: {}, detachTop: true })).isError).toBe(true);
+    expect((await tool.invoke({ attachTop: {} })).isError).toBe(true);
+    expect(sendCommand).not.toHaveBeenCalled();
+    expect(TOOL_MANIFEST.attach_columns.readOnly).toBe(false);
   });
 });
