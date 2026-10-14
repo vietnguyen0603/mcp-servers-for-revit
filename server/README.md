@@ -96,6 +96,8 @@ Configure the behaviour with environment variables on the MCP server:
 | `attach_columns` | structure, modify | Attach/detach column tops and bases to beams, floors, roofs (auto-found above/below or by id), with justification, cut style and offset |
 | `summarize_structural_members` | structure | Group placed beams/columns by comments, mark, type, usage or level with counts and elevation ranges |
 | `delete_element` | modify | Delete elements by ID |
+| `rename_families_types` | modify, annotate | Find/replace family, type and system type names (e.g. TT -> AC template clean-up), dry run with collisions and names that can't be renamed in place |
+| `merge_duplicate_families` | modify, annotate | Merge duplicate families/types whose parameters and drawn geometry match: switch instances, re-point references, delete duplicates (skips grouped instances) |
 | `operate_element` | modify | Operate on elements (select, setColor, hide, etc.) |
 | `color_elements` | modify | Color elements based on a parameter value |
 | `tag_all_walls` | annotate | Tag all walls in the current view |
