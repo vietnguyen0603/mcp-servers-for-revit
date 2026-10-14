@@ -169,12 +169,15 @@ namespace RevitMCPCommandSet.Utils
         ///     isolating each item in a sub-transaction so one failure does not
         ///     discard the others. Returns one result object per item, in order.
         /// </summary>
+        /// <param name="before">Optional step run inside the transaction before the items (outside any sub-transaction).</param>
+        /// <param name="after">Optional step run inside the transaction after the items, before commit (e.g. clean-up).</param>
         public static List<JObject> RunBatch(Document doc, string transactionName, JArray items,
-            Func<JToken, object> action)
+            Func<JToken, object> action, Action before = null, Action after = null)
         {
             var results = new List<JObject>();
             using (var transaction = StartTransaction(doc, transactionName))
             {
+                before?.Invoke();
                 for (var index = 0; index < items.Count; index++)
                 {
                     var subTransaction = new SubTransaction(doc);
@@ -200,6 +203,7 @@ namespace RevitMCPCommandSet.Utils
                     }
                 }
 
+                after?.Invoke();
                 var status = transaction.Commit();
                 if (status != TransactionStatus.Committed)
                 {

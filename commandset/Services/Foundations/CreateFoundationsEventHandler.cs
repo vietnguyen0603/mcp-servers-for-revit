@@ -10,7 +10,8 @@ namespace RevitMCPCommandSet.Services.Foundations
     /// <summary>
     ///     create_foundations: isolated footings / pile caps (family instances), piles
     ///     (structural columns or foundation families spanning [top - length, top]) and
-    ///     polygonal caps (foundation slabs). One transaction per call (chunk), one
+    ///     polygonal caps (foundation slabs) and line-based foundations (copies of a hand-placed
+    ///     seed, see <see cref="LineFoundationPlacer" />). One transaction per call (chunk), one
     ///     sub-transaction per item.
     /// </summary>
     public class CreateFoundationsEventHandler : JsonParameterEventHandler
@@ -22,6 +23,7 @@ namespace RevitMCPCommandSet.Services.Foundations
             var doc = uiDoc.Document;
             var items = DocumentationUtils.RequireArray(parameters, "foundations");
             var ctx = new FoundationModelUtils.Context(doc);
+            var lines = new LineFoundationPlacer(ctx, ResolveSymbol);
             var results = DocumentationUtils.RunBatch(doc, "MCP: Create Foundations", items, token =>
             {
                 if (!(token is JObject item))
@@ -39,12 +41,15 @@ namespace RevitMCPCommandSet.Services.Foundations
                     case "capslab":
                         result = CreateFoundationSlab(ctx, item);
                         break;
+                    case "line":
+                        result = lines.Create(item);
+                        break;
                     default:
-                        throw new ArgumentException($"Unknown kind '{kind}' (isolated, pile, capSlab).");
+                        throw new ArgumentException($"Unknown kind '{kind}' (isolated, pile, capSlab, line).");
                 }
                 result.AddFirst(new JProperty("kind", kind));
                 return result;
-            });
+            }, () => lines.Prepare(items), lines.Cleanup);
             return Ok($"Created {results.Count(r => r.Value<bool>("success"))} of {results.Count} foundations.",
                 DocumentationUtils.Summarize(results));
         }
@@ -180,7 +185,7 @@ namespace RevitMCPCommandSet.Services.Foundations
         }
 
         /// <summary>typeId, or familyName (+ typeName, default the first type); cached per call.</summary>
-        private static FamilySymbol ResolveSymbol(FoundationModelUtils.Context ctx, JObject item)
+        internal static FamilySymbol ResolveSymbol(FoundationModelUtils.Context ctx, JObject item)
         {
             var doc = ctx.Doc;
             var typeId = DocumentationUtils.ReadId(item, "typeId");

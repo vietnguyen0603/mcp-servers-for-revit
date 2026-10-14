@@ -435,7 +435,7 @@
     },
     {
       "commandName": "create_foundations",
-      "description": "Create isolated footings, piles and polygonal pile caps in bulk",
+      "description": "Create isolated footings, piles, polygonal pile caps and line-based grade beams (copied from a hand-placed seed) in bulk",
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {

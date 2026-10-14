@@ -76,7 +76,7 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
   create_foundations: {
     catalogs: ["structure"],
     readOnly: false,
-    keywords: ["footing", "pile", "pile cap", "isolated footing", "foundation", "bulk", "csv", "hexagonal cap"],
+    keywords: ["footing", "pile", "pile cap", "isolated footing", "foundation", "bulk", "csv", "hexagonal cap", "grade beam", "strip footing", "wall footing", "continuous footing", "line-based"],
   },
   pdf_extract: {
     catalogs: ["structure", "views"],

@@ -79,7 +79,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_line_based_element` | architecture, structure | Create line-based elements (wall, beam, pipe) |
 | `create_surface_based_element` | architecture, structure | Create surface-based elements (floor, ceiling, roof) |
 | `create_slabs` | structure, architecture | Create floors and foundation slabs with openings, step offsets, arcs and slope arrows (bulk, CSV/JSON files) |
-| `create_foundations` | structure | Create isolated footings, piles (under caps by mark) and polygonal pile caps in bulk (CSV/JSON files) |
+| `create_foundations` | structure | Create isolated footings, piles (under caps by mark), polygonal pile caps and line-based grade beams (copies of a hand-placed seed) in bulk (CSV/JSON files) |
 | `create_grid` | architecture, structure | Create a grid system with smart spacing generation |
 | `create_level` | architecture, structure | Create levels at specified elevations |
 | `create_offset_levels` | structure, architecture | Create levels offset from source levels (e.g. TOP PLATE 1' below each floor) with matching extents |

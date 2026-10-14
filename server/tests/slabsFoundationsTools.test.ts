@@ -192,6 +192,46 @@ describe("create_foundations", () => {
     expect((sendCommand.mock.calls[1][1] as { foundations: unknown[] }).foundations).toHaveLength(1);
   });
 
+  it("validates line (grade beam) items", () => {
+    const tool = setup()("create_foundations");
+    const good = [
+      { kind: "line", familyName: "_TT-Grade Beam", typeName: "GB1", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, level: "Foundation", offset: -300, mark: "GB1", comments: "TYP" },
+      { kind: "line", seedElementId: 12345, start: { x: 0, y: 0 }, end: { x: 0, y: 4000 }, level: 0 },
+      { kind: "line", typeId: 77, start: { x: 0, y: 0 }, end: { x: 1, y: 1 }, level: "B1" },
+    ];
+    expect(() => tool.parse({ foundations: good })).not.toThrow();
+    const bad = [
+      { kind: "line", start: { x: 0, y: 0 }, end: { x: 6000, y: 0 }, level: "B1" },
+      { kind: "line", familyName: "GB", start: { x: 5, y: 5 }, end: { x: 5, y: 5 }, level: "B1" },
+      { kind: "line", familyName: "GB", start: { x: 0, y: 0 }, level: "B1" },
+      { kind: "line", familyName: "GB", start: { x: 0, y: 0 }, end: { x: 1, y: 0 } },
+      { kind: "line", familyName: "GB", start: { x: 0, y: 0 }, end: { x: 1, y: 0 }, level: "B1", x: 3 },
+    ];
+    for (const item of bad) {
+      expect(() => tool.parse({ foundations: [item] }), JSON.stringify(item)).toThrow();
+    }
+  });
+
+  it("reads grade beams from CSV with dotted start/end headers", async () => {
+    const tool = setup()("create_foundations");
+    const csv = tempFile(
+      "beams.csv",
+      "kind,familyName,typeName,level,start.x,start.y,end.x,end.y,mark\nline,_TT-Grade Beam,GB1,Foundation,0,0,6000,0,GB-1\n"
+    );
+    const result = await tool.invoke({ dataFile: csv });
+    expect(result.isError).toBeUndefined();
+    const sent = (sendCommand.mock.calls[0][1] as { foundations: Array<Record<string, unknown>> }).foundations;
+    expect(sent[0]).toEqual({
+      kind: "line",
+      familyName: "_TT-Grade Beam",
+      typeName: "GB1",
+      level: "Foundation",
+      start: { x: 0, y: 0 },
+      end: { x: 6000, y: 0 },
+      mark: "GB-1",
+    });
+  });
+
   it("is an error only when nothing succeeded", async () => {
     const tool = setup()("create_foundations");
     sendCommand.mockResolvedValue({
