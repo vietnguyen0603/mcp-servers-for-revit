@@ -235,6 +235,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["beam", "girder", "joist", "framing", "steel beam", "bulk", "csv", "justification"],
   },
+  create_trusses: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["truss", "roof truss", "steel truss", "chord", "web", "howe", "pratt", "warren", "span", "array", "bulk"],
+  },
+  create_member_array: {
+    catalogs: ["structure"],
+    readOnly: false,
+    keywords: ["purlin", "girt", "joist", "roof", "slope", "eave", "ridge", "spacing", "layout", "array", "framing", "beam"],
+  },
   modify_structural_members: {
     catalogs: ["structure", "modify"],
     readOnly: false,

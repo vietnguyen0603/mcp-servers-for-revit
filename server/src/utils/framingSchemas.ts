@@ -44,11 +44,24 @@ function errorResult(text: string): CallToolResult {
  * Loads inline + file items, validates every item against `itemSchema`
  * (file items never passed the MCP boundary) and sends them in chunks.
  */
+export interface FramingBulkOptions<T> {
+  /**
+   * Turns one validated item into the records sent to Revit (e.g. an array
+   * into its copies). Results then carry `source` (the item index) and
+   * `copy` (the position within that item).
+   */
+  expand?: (item: T, index: number) => unknown[];
+  /** Revit command and items key to send to, when different from the tool (default: command / itemsKey). */
+  sendCommand?: string;
+  sendKey?: string;
+}
+
 export async function runFramingBulk<T>(
   command: string,
   itemsKey: string,
   itemSchema: z.ZodType<T>,
-  args: BulkInputArgs<unknown>
+  args: BulkInputArgs<unknown>,
+  options: FramingBulkOptions<T> = {}
 ): Promise<CallToolResult> {
   let raw: unknown[];
   try {
@@ -84,5 +97,39 @@ export async function runFramingBulk<T>(
     );
   }
 
-  return formatBulkResult(command, await sendInChunks(command, {}, itemsKey, items), { summary: args.summary === true });
+  if (!options.expand) {
+    const outcome = await sendInChunks(options.sendCommand ?? command, {}, options.sendKey ?? itemsKey, items);
+    return formatBulkResult(command, outcome, { summary: args.summary === true });
+  }
+
+  const records: unknown[] = [];
+  const origin: Array<{ source: number; copy: number }> = [];
+  try {
+    items.forEach((item, index) => {
+      let expanded: unknown[];
+      try {
+        expanded = options.expand!(item, index);
+      } catch (error) {
+        throw new Error(`${itemsKey}[${index}]: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      if (expanded.length === 0) throw new Error(`${itemsKey}[${index}]: generates no members`);
+      expanded.forEach((record, copy) => {
+        records.push(record);
+        origin.push({ source: index, copy });
+      });
+      if (records.length > MAX_TOTAL_ITEMS) {
+        throw new Error(`more than ${MAX_TOTAL_ITEMS} members would be created; split the call`);
+      }
+    });
+  } catch (error) {
+    return errorResult(`${command} failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const outcome = await sendInChunks(options.sendCommand ?? command, {}, options.sendKey ?? itemsKey, records);
+  outcome.results = outcome.results.map((result) => {
+    const record = result as Record<string, unknown>;
+    const at = typeof record.index === "number" ? origin[record.index] : undefined;
+    return at ? { ...record, ...at } : record;
+  });
+  return formatBulkResult(command, outcome, { summary: args.summary === true });
 }

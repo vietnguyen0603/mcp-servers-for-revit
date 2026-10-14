@@ -419,6 +419,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "create_trusses",
+      "description": "Place structural trusses along plan lines in bulk (bearing chord, height, chord/web types)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "modify_structural_members",
       "description": "Edit placed framing/columns by filter: type, structural usage, offsets, levels, justification, mark/comments",
       "assemblyPath": "RevitMCPCommandSet.dll"
