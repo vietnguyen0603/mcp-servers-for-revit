@@ -106,6 +106,8 @@ Built and merged on `feat/drafting-gaps` (untested live until Revit restarts): `
 `list_drafting_types`, `create_text_note` `textNoteTypeName`, dimension text `position`/`leader` (G21),
 `crop_image_grid`, `overlay_images`, `image_info`. The Revit MCP server is registered in Claude Code (`revit`).
 
-Still script-based (read-only `send_code_to_revit`): `harvest-standards.cs` (revit-detail-standards) and
-`audit-details.cs` (revit-detail-qa) — candidates for `get_drafting_standards` and `audit_detail_library` tools.
-Still open: G14 imperial strings, G17 CAD cleanup, G18 library search, G25 text extents.
+The former scripts `harvest-standards.cs` (revit-detail-standards) and `audit-details.cs` (revit-detail-qa) are
+now the read-only tools `get_drafting_standards` and `audit_detail_library`. G18 is covered by
+`search_detail_library`, a keyword search over a per-document SQLite index (FTS5 when available) that is built
+from the `get_drafting_view_index` command. None of these have been tested live yet.
+Still open: G14 imperial strings, G17 CAD cleanup, G25 text extents.

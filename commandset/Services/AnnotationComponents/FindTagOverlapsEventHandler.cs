@@ -89,7 +89,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
         ///     <paramref name="same" /> is true the two lists are the same and
         ///     each unordered pair is reported once.
         /// </summary>
-        private static void Sweep(List<Extent> left, List<Extent> right, bool same,
+        internal static void Sweep(List<Extent> left, List<Extent> right, bool same,
             List<(Extent a, Extent b, double area)> pairs)
         {
             var sortedRight = right.OrderBy(x => x.MinU).ToList();
@@ -145,7 +145,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                 .ToList();
         }
 
-        private class Extent
+        internal class Extent
         {
             public long Id { get; private set; }
             public string Category { get; private set; }

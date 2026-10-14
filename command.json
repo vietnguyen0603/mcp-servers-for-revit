@@ -334,6 +334,21 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "get_drafting_standards",
+      "description": "Harvest the line styles, text/dimension/fill types, detail families by role, viewport types and naming used in drafting views",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "audit_detail_library",
+      "description": "QA the typical-detail library: references, placement, naming, non-standard types, CAD leftovers, text overlaps, dimension overrides, drawing list",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_drafting_view_index",
+      "description": "Return a searchable index of drafting views (name, sheet/detail number, note text, family names)",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "sync_detail_references",
       "description": "Rewrite detail/sheet numbers of manual detail-reference bubbles",
       "assemblyPath": "RevitMCPCommandSet.dll"

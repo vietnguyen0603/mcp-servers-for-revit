@@ -452,6 +452,21 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: true,
     keywords: ["section cut", "bubble", "detail number", "sheet number", "view reference", "dead", "qa", "library"],
   },
+  get_drafting_standards: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["harvest", "office standards", "line style", "text type", "dimension type", "filled region", "pen", "break line", "rebar", "weld", "subtitle", "snapshot", "typical detail"],
+  },
+  audit_detail_library: {
+    catalogs: ["annotate", "views"],
+    readOnly: true,
+    keywords: ["qa", "check details", "unplaced", "naming", "cad import", "dwg", "overlap", "dimension override", "drawing list", "typical detail", "library"],
+  },
+  search_detail_library: {
+    catalogs: ["views", "annotate", "data"],
+    readOnly: false,
+    keywords: ["find detail", "search", "typical detail", "library", "note text", "keyword", "index", "drafting view"],
+  },
   sync_detail_references: {
     catalogs: ["annotate"],
     readOnly: false,
