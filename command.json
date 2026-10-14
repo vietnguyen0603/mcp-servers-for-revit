@@ -562,6 +562,26 @@
       "commandName": "check_model",
       "description": "Read-only model QA: counts, elevations, overlaps/clashes, unsupported beams/columns, levels without floor",
       "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "link_cad",
+      "description": "Link or import a DWG/DXF with view, units, positioning, level, colour, layer and pin options",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "get_cad_geometry",
+      "description": "Read a CAD import's curves in model coordinates grouped by layer, or list the CAD imports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "trace_cad_import",
+      "description": "Redraw a CAD import's curves as detail or model lines with a layer to line style map, dry run by default",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "purge_cad_leftovers",
+      "description": "Delete unused CAD types and imported *.dwg filled region types / fill patterns, optional remap, dry run by default",
+      "assemblyPath": "RevitMCPCommandSet.dll"
     }
   ]
 }

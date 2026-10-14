@@ -108,4 +108,5 @@ Built and merged on `feat/drafting-gaps` (untested live until Revit restarts): `
 
 Still script-based (read-only `send_code_to_revit`): `harvest-standards.cs` (revit-detail-standards) and
 `audit-details.cs` (revit-detail-qa) — candidates for `get_drafting_standards` and `audit_detail_library` tools.
-Still open: G14 imperial strings, G17 CAD cleanup, G18 library search, G25 text extents.
+Still open: G14 imperial strings, G18 library search, G25 text extents.
+G17 CAD cleanup: `trace_cad_import` + `purge_cad_leftovers` added (live Revit test pending).
