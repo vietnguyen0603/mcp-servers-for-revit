@@ -92,7 +92,8 @@ grids were removed afterwards; model counts unchanged (324 columns + 685 piles, 
 | B5 | not a bug: the user had saved the file as "P181 STR 3D (MCP check).rvt", which is also the name of the view |
 | **S9b (new)** | bulk tools return every per-item result (738 rows); they should return a summary (counts, failures, id range) by default, with per-item detail on request |
 
-Still open: S13 trusses/purlins, S10 CAD link + geometry, S7/S11 custom sections, the client's 2-minute timeout per chunk,
+S10 CAD link + geometry: `link_cad` + `get_cad_geometry` added (live Revit test pending).
+Still open: S13 trusses/purlins, S7/S11 custom sections, the client's 2-minute timeout per chunk,
 and `create_family_type` should fail (not warn) on unknown parameters.
 
 ## B6 — pile caps drop when piles are structural columns (2026-10-04)

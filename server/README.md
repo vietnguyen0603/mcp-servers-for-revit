@@ -134,6 +134,10 @@ Configure the behaviour with environment variables on the MCP server:
 | `get_grid_register_data` | structure | Return register-ready grid data (one record per grid, axis family and coordinate in mm) |
 | `get_column_wall_register_data` | structure | Return register-ready column and wall data (one record per physical column or wall leg in mm) |
 | `get_beam_register_data` | structure | Return register-ready beam data with start/end supports and face-to-face clear span (mm) |
+| `link_cad` | structure, architecture, annotate | Link or import a DWG/DXF (view or all views, units, origin/center/shared, level, colour, layers, pin); returns instance/type ids, transform and layers |
+| `get_cad_geometry` | structure, annotate | Read a CAD import's lines/arcs/circles/polylines in model mm grouped by layer (filters, summary mode); lists imports without an id. Texts are not exposed by the API |
+| `trace_cad_import` | annotate, modify | Redraw a CAD import as detail or model lines with a layer to line style map, optionally delete the import (dry run by default) |
+| `purge_cad_leftovers` | annotate, modify | Delete unused CAD types and imported `*.dwg-N` filled region types / fill patterns, optional remap of regions (dry run by default) |
 | `store_project_data` | data | Store project metadata in local database |
 | `store_room_data` | data | Store room metadata in local database |
 | `query_stored_data` | data | Query stored project and room data |

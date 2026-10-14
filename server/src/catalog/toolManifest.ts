@@ -478,6 +478,30 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     keywords: ["sheet", "layout", "grid", "module", "detail number", "viewport", "typical detail", "pack"],
   },
 
+  // CAD link / import / cleanup
+  link_cad: {
+    catalogs: ["structure", "architecture", "annotate"],
+    readOnly: false,
+    keywords: ["dwg", "dxf", "cad", "link cad", "import cad", "autocad", "layers", "underlay", "background drawing"],
+  },
+  get_cad_geometry: {
+    catalogs: ["structure", "annotate"],
+    readOnly: true,
+    keywords: ["dwg", "dxf", "cad", "layers", "lines", "polylines", "read drawing", "import instance", "coordinates"],
+  },
+  trace_cad_import: {
+    catalogs: ["annotate", "modify"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["dwg", "cad", "explode", "convert", "detail lines", "model lines", "line style", "layer", "cleanup"],
+  },
+  purge_cad_leftovers: {
+    catalogs: ["annotate", "modify"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["dwg", "cad", "purge", "unused", "fill pattern", "filled region type", "cleanup", "import types", "qa"],
+  },
+
   // modify
   operate_element: {
     catalogs: ["modify"],
