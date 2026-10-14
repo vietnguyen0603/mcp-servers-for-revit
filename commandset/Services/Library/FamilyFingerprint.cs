@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using RevitMCPCommandSet.Utils;
 
 namespace RevitMCPCommandSet.Services.Library
@@ -21,17 +22,21 @@ namespace RevitMCPCommandSet.Services.Library
     ///         <item>
     ///             Family drawing (loadable families): the family is opened read-only with
     ///             EditFamily (closed without saving) and every drawn element is reduced to a
-    ///             token - lines (category, line style, curve type, length, end points), filled /
-    ///             masking regions (type, loops, boundary length, extents), text and labels
-    ///             (text, position, type), solid/void forms (volume, faces, extents), nested
-    ///             instances (category + placement transform; not their contents), imports
-    ///             (extents) and any other model/annotation element (class, category, extents).
-    ///             Reference planes, dimensions and views are ignored. Coordinates are rounded
-    ///             to 1e-4 ft (0.03 mm), so the same drawing placed differently is a mismatch.
+    ///             token under an aspect - lines (category, line style, curve type, length, end
+    ///             points), regions (type, loops, perimeter, extents), texts/labels (text,
+    ///             position, type), forms (class, solid/void, extrusion depth, bounding box,
+    ///             volume/faces/edges), nested instances (category + placement; not their
+    ///             contents), imports (extents) and other model/annotation elements (class,
+    ///             category, extents). Reference planes, dimensions, views, sketches, elevation
+    ///             markers and origins are ignored.
     ///         </item>
     ///         <item>System families (walls, floors ...): compound structure layers.</item>
     ///     </list>
-    ///     Each signature is the SHA-1 of the sorted tokens; equal hashes mean "same".
+    ///     Tokens never contain element ids, unique ids or the family/type's own name, are written in mm
+    ///     and are direction-independent (curve end points in a stable order). Comparison is an
+    ///     order-independent multiset match where every number may differ by 0.05 (mm / cm3) + 1e-5
+    ///     relative, so floating-point noise doesn't separate identical families. The hash of the
+    ///     sorted tokens is only a fast path for "identical".
     /// </summary>
     public static class FamilyFingerprint
     {
@@ -142,8 +147,11 @@ namespace RevitMCPCommandSet.Services.Library
             }
         }
 
-        /// <summary>Hash of FamilySymbol.get_Geometry (empty string when the type has no geometry).</summary>
-        public static string TypeGeometry(ElementType type)
+        /// <summary>
+        ///     Tokens of FamilySymbol.get_Geometry (solids, curves, nested instances) or of a system type's
+        ///     compound structure. Empty when the type has no geometry. Compare with <see cref="SameTokens" />.
+        /// </summary>
+        public static List<string> TypeGeometry(ElementType type)
         {
             var tokens = new List<string>();
             try
@@ -159,15 +167,16 @@ namespace RevitMCPCommandSet.Services.Library
                     var structure = host.GetCompoundStructure();
                     if (structure != null)
                         foreach (var layer in structure.GetLayers())
-                            tokens.Add($"layer|{layer.Function}|{Num(layer.Width, 6)}|{type.Document.GetElement(layer.MaterialId)?.Name}");
+                            tokens.Add($"layer {layer.Function} w={Mm(layer.Width)} material='{type.Document.GetElement(layer.MaterialId)?.Name}'");
                 }
             }
             catch (Exception ex)
             {
-                tokens.Add("error|" + ex.GetType().Name);
+                tokens.Add("error " + ex.GetType().Name);
             }
 
-            return tokens.Count == 0 ? "" : Hash(tokens);
+            tokens.Sort(StringComparer.Ordinal);
+            return tokens;
         }
 
         private static void Walk(GeometryElement geometry, List<string> tokens, int depth)
@@ -177,19 +186,19 @@ namespace RevitMCPCommandSet.Services.Library
                 switch (obj)
                 {
                     case Solid solid when solid.Volume > 1e-9 || solid.Faces.Size > 0:
-                        tokens.Add($"solid|{depth}|{Num(solid.Volume, 6)}|{solid.Faces.Size}|{solid.Edges.Size}");
+                        tokens.Add($"solid d{depth} vol={Cm3(solid.Volume)}cm3 faces={solid.Faces.Size} edges={solid.Edges.Size}");
                         break;
                     case Curve curve:
-                        tokens.Add("curve|" + depth + "|" + CurveToken(curve));
+                        tokens.Add($"curve d{depth} " + CurveToken(curve));
                         break;
                     case Mesh mesh:
-                        tokens.Add($"mesh|{depth}|{mesh.NumTriangles}");
+                        tokens.Add($"mesh d{depth} triangles={mesh.NumTriangles}");
                         break;
                     case PolyLine polyLine:
-                        tokens.Add($"polyline|{depth}|{polyLine.NumberOfCoordinates}");
+                        tokens.Add($"polyline d{depth} points={polyLine.NumberOfCoordinates}");
                         break;
                     case GeometryInstance instance when depth < 4:
-                        tokens.Add($"instance|{depth}|{Pt(instance.Transform.Origin)}|{Pt(instance.Transform.BasisX)}");
+                        tokens.Add($"instance d{depth} at {Pt(instance.Transform.Origin)} x={Dir(instance.Transform.BasisX)}");
                         var nested = instance.GetSymbolGeometry();
                         if (nested != null)
                             Walk(nested, tokens, depth + 1);
@@ -199,12 +208,12 @@ namespace RevitMCPCommandSet.Services.Library
         }
 
         /// <summary>
-        ///     Opens the family read-only and hashes its drawn elements (see class summary).
-        ///     Returns null with <paramref name="error" /> set when the family can't be opened.
+        ///     Opens the family read-only and reduces its drawn elements to tokens grouped by aspect
+        ///     (see class summary). Returns null with <paramref name="error" /> set when the family
+        ///     can't be opened.
         /// </summary>
-        public static string FamilyDrawing(Document doc, Family family, out DrawingSummary summary, out string error)
+        public static Drawing FamilyDrawing(Document doc, Family family, out string error)
         {
-            summary = new DrawingSummary();
             error = null;
             if (family.IsInPlace)
             {
@@ -222,17 +231,28 @@ namespace RevitMCPCommandSet.Services.Library
             try
             {
                 familyDoc = doc.EditFamily(family);
-                var tokens = new List<string>();
+                var drawing = new Drawing();
                 var options = new Options { DetailLevel = ViewDetailLevel.Fine };
                 foreach (var element in new FilteredElementCollector(familyDoc).WhereElementIsNotElementType())
                 {
-                    var token = ElementToken(familyDoc, element, options, summary);
+                    string token, aspect;
+                    try
+                    {
+                        token = ElementToken(familyDoc, element, options, drawing.Summary, out aspect);
+                    }
+                    catch (Exception ex)
+                    {
+                        aspect = "other";
+                        token = $"{element.GetType().Name}/{element.Category?.Name} unreadable ({ex.GetType().Name})";
+                    }
+
                     if (token != null)
-                        tokens.Add(token);
+                        drawing.Add(aspect, token);
                 }
 
-                tokens.Add("category|" + family.FamilyCategory?.Id.GetValue());
-                return Hash(tokens);
+                drawing.Add("category", family.FamilyCategory?.Name ?? "<none>");
+                drawing.Seal();
+                return drawing;
             }
             catch (Exception ex)
             {
@@ -245,8 +265,21 @@ namespace RevitMCPCommandSet.Services.Library
             }
         }
 
-        private static string ElementToken(Document familyDoc, Element element, Options options, DrawingSummary summary)
+        /// <summary>
+        ///     Classes that are not part of the drawing: datums, views and their markers, sketches (their
+        ///     lines are counted as lines), constraints, origins, project settings. Matched by name so
+        ///     classes missing from older Revit versions don't break the build.
+        /// </summary>
+        private static readonly HashSet<string> IgnoredClasses = new HashSet<string>(StringComparer.Ordinal)
         {
+            "ElevationMarker", "Sketch", "SketchBase", "InternalOrigin", "BasePoint", "SunAndShadowSettings",
+            "ProjectInfo", "Viewport", "ConstraintElement", "SketchPlane", "ReferencePlane", "Level", "Family",
+            "GraphicsStyle", "Material"
+        };
+
+        private static string ElementToken(Document familyDoc, Element element, Options options, DrawingSummary summary, out string aspect)
+        {
+            aspect = "other";
             switch (element)
             {
                 case View _:
@@ -264,11 +297,13 @@ namespace RevitMCPCommandSet.Services.Library
                     if (curve == null)
                         return null;
                     summary.Lines++;
-                    return $"line|{element.Category?.Name}|{curveElement.LineStyle?.Name}|{CurveToken(curve)}";
+                    aspect = "lines";
+                    return $"{element.Category?.Name}/{curveElement.LineStyle?.Name} {CurveToken(curve)}";
                 }
                 case FilledRegion region:
                 {
                     summary.Regions++;
+                    aspect = "regions";
                     var loops = region.GetBoundaries();
                     var length = 0.0;
                     var points = new List<XYZ>();
@@ -279,59 +314,94 @@ namespace RevitMCPCommandSet.Services.Library
                             points.Add(curve.GetEndPoint(0));
                         }
 
-                    return $"region|{familyDoc.GetElement(region.GetTypeId())?.Name}|{region.IsMasking}|{loops.Count}|{Num(length, 4)}|{Extents(points)}";
+                    return $"{(region.IsMasking ? "masking" : "filled")} '{familyDoc.GetElement(region.GetTypeId())?.Name}' loops={loops.Count} perimeter={Mm(length)} extents={Extents(points)}";
                 }
                 case TextElement text:
                     summary.Texts++;
-                    return $"text|{element.Category?.Name}|{text.Text}|{Pt(text.Coord)}|{familyDoc.GetElement(text.GetTypeId())?.Name}";
+                    aspect = "texts";
+                    return $"{element.Category?.Name} '{text.Text}' at {Pt(text.Coord)} type='{familyDoc.GetElement(text.GetTypeId())?.Name}'";
                 case GenericForm form:
                 {
                     summary.Forms++;
+                    aspect = "forms";
                     var tokens = new List<string>();
                     var geometry = form.get_Geometry(options);
                     if (geometry != null)
                         Walk(geometry, tokens, 0);
                     tokens.Sort(StringComparer.Ordinal);
-                    return $"form|{form.GetType().Name}|{form.IsSolid}|{string.Join(";", tokens)}";
+                    var depth = form is Extrusion extrusion ? $" depth={Mm(Math.Abs(extrusion.EndOffset - extrusion.StartOffset))}" : "";
+                    return $"{form.GetType().Name} {(form.IsSolid ? "solid" : "void")}{depth} box={Box(form.get_BoundingBox(null))} [{string.Join("; ", tokens)}]";
                 }
                 case FamilyInstance instance:
                 {
                     summary.Nested++;
+                    aspect = "nested";
                     var transform = instance.GetTransform();
-                    return $"nested|{element.Category?.Name}|{Pt(transform.Origin)}|{Pt(transform.BasisX)}|{Pt(transform.BasisY)}";
+                    return $"{element.Category?.Name} at {Pt(transform.Origin)} x={Dir(transform.BasisX)} y={Dir(transform.BasisY)}";
                 }
                 case ImportInstance import:
                     summary.Imports++;
-                    return $"import|{Box(import.get_BoundingBox(null))}";
+                    aspect = "imports";
+                    return $"import box={Box(import.get_BoundingBox(null))}";
             }
 
+            var className = element.GetType().Name;
+            if (IgnoredClasses.Contains(className))
+                return null;
             var category = element.Category;
             if (category == null || (category.CategoryType != CategoryType.Model && category.CategoryType != CategoryType.Annotation))
                 return null;
             var box = element.get_BoundingBox(null);
             if (box == null)
                 return null;
-            summary.Other++;
-            return $"element|{element.GetType().Name}|{category.Name}|{Box(box)}";
+            summary.AddOther(className + "/" + category.Name);
+            return $"{className}/{category.Name} box={Box(box)}";
         }
 
+        /// <summary>Direction-independent: the end points are written in a stable order.</summary>
         private static string CurveToken(Curve curve)
         {
             if (!curve.IsBound)
-                return $"{curve.GetType().Name}|unbound|{Num(curve.Length, 4)}";
-            return $"{curve.GetType().Name}|{Num(curve.Length, 4)}|{Pt(curve.GetEndPoint(0))}|{Pt(curve.GetEndPoint(1))}";
+                return $"{curve.GetType().Name} unbound L={Mm(curve.Length)}";
+            var p0 = curve.GetEndPoint(0);
+            var p1 = curve.GetEndPoint(1);
+            if (Before(p1, p0))
+            {
+                var swap = p0;
+                p0 = p1;
+                p1 = swap;
+            }
+
+            return $"{curve.GetType().Name} L={Mm(curve.Length)} {Pt(p0)} to {Pt(p1)}";
+        }
+
+        /// <summary>Point order with a 0.5 mm dead band so noise can't swap the ends of an axis-aligned line.</summary>
+        private static bool Before(XYZ a, XYZ b)
+        {
+            const double band = 0.5 / 304.8;
+            if (Math.Abs(a.X - b.X) > band) return a.X < b.X;
+            if (Math.Abs(a.Y - b.Y) > band) return a.Y < b.Y;
+            return a.Z < b.Z;
         }
 
         private static string Extents(List<XYZ> points)
         {
             if (points.Count == 0)
                 return "";
-            return $"{Num(points.Min(p => p.X), 4)},{Num(points.Min(p => p.Y), 4)}..{Num(points.Max(p => p.X), 4)},{Num(points.Max(p => p.Y), 4)}";
+            return $"({Mm(points.Min(p => p.X))},{Mm(points.Min(p => p.Y))})..({Mm(points.Max(p => p.X))},{Mm(points.Max(p => p.Y))})";
         }
 
-        private static string Box(BoundingBoxXYZ box) => box == null ? "" : Pt(box.Min) + ".." + Pt(box.Max);
+        private static string Box(BoundingBoxXYZ box) => box == null ? "none" : Pt(box.Min) + ".." + Pt(box.Max);
 
-        private static string Pt(XYZ p) => p == null ? "" : $"{Num(p.X, 4)},{Num(p.Y, 4)},{Num(p.Z, 4)}";
+        /// <summary>Point in mm (0.01 mm).</summary>
+        private static string Pt(XYZ p) => p == null ? "" : $"({Mm(p.X)},{Mm(p.Y)},{Mm(p.Z)})";
+
+        /// <summary>Unit direction (1e-4).</summary>
+        private static string Dir(XYZ p) => p == null ? "" : $"({Num(p.X, 4)},{Num(p.Y, 4)},{Num(p.Z, 4)})";
+
+        private static string Mm(double feet) => Num(feet * 304.8, 2);
+
+        private static string Cm3(double cubicFeet) => Num(cubicFeet * 28316.846592, 2);
 
         private static string Num(double value, int digits)
         {
@@ -351,9 +421,192 @@ namespace RevitMCPCommandSet.Services.Library
             }
         }
 
+        // ---------------------------------------------------------------- tolerant comparison
+
+        private static readonly Regex NumberPattern = new Regex(@"-?\d+(?:\.\d+)?", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        /// <summary>Numbers match within 0.05 (mm, cm3, or 5e-2 of a count) plus 1e-5 relative.</summary>
+        private static bool Close(double a, double b) => Math.Abs(a - b) <= 0.05 + 1e-5 * Math.Max(Math.Abs(a), Math.Abs(b));
+
+        private sealed class ParsedToken
+        {
+            public string Text;
+            public string Template;
+            public double[] Numbers;
+        }
+
+        private static ParsedToken Parse(string token)
+        {
+            var numbers = new List<double>();
+            var template = NumberPattern.Replace(token, m =>
+            {
+                numbers.Add(double.Parse(m.Value, CultureInfo.InvariantCulture));
+                return "#";
+            });
+            return new ParsedToken { Text = token, Template = template, Numbers = numbers.ToArray() };
+        }
+
+        private static bool Close(ParsedToken a, ParsedToken b)
+        {
+            if (a.Template != b.Template || a.Numbers.Length != b.Numbers.Length)
+                return false;
+            for (var i = 0; i < a.Numbers.Length; i++)
+                if (!Close(a.Numbers[i], b.Numbers[i]))
+                    return false;
+            return true;
+        }
+
+        /// <summary>
+        ///     Order-independent multiset match of two token lists: exact matches first, then the rest
+        ///     pairwise within tolerance. Returns the tokens left over on each side.
+        /// </summary>
+        public static void Unmatched(IList<string> a, IList<string> b, out List<string> onlyA, out List<string> onlyB)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var token in b)
+                counts[token] = counts.TryGetValue(token, out var n) ? n + 1 : 1;
+            var restA = new List<string>();
+            foreach (var token in a)
+            {
+                if (counts.TryGetValue(token, out var n) && n > 0)
+                    counts[token] = n - 1;
+                else
+                    restA.Add(token);
+            }
+
+            var restB = new List<string>();
+            foreach (var pair in counts)
+                for (var i = 0; i < pair.Value; i++)
+                    restB.Add(pair.Key);
+
+            onlyA = new List<string>();
+            onlyB = new List<string>();
+            if (restA.Count == 0 || restB.Count == 0 || restA.Count * (long)restB.Count > 4000000)
+            {
+                onlyA.AddRange(restA);
+                onlyB.AddRange(restB);
+            }
+            else
+            {
+                var pool = restB.Select(Parse).GroupBy(p => p.Template).ToDictionary(g => g.Key, g => g.ToList());
+                foreach (var token in restA.Select(Parse))
+                {
+                    if (pool.TryGetValue(token.Template, out var candidates))
+                    {
+                        var index = candidates.FindIndex(c => Close(token, c));
+                        if (index >= 0)
+                        {
+                            candidates.RemoveAt(index);
+                            continue;
+                        }
+                    }
+
+                    onlyA.Add(token.Text);
+                }
+
+                onlyB.AddRange(pool.Values.SelectMany(l => l.Select(p => p.Text)));
+            }
+
+            onlyA.Sort(StringComparer.Ordinal);
+            onlyB.Sort(StringComparer.Ordinal);
+        }
+
+        public static bool SameTokens(IList<string> a, IList<string> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+            Unmatched(a, b, out var onlyA, out var onlyB);
+            return onlyA.Count == 0 && onlyB.Count == 0;
+        }
+
+        /// <summary>
+        ///     Human-readable differences between two token lists, e.g.
+        ///     "forms (1 each): keep 'Extrusion solid depth=400 ...' vs merge 'Extrusion solid depth=500 ...'".
+        /// </summary>
+        public static List<string> TokenDifferences(string aspect, IList<string> keep, IList<string> merge, int examples = 3)
+        {
+            var result = new List<string>();
+            Unmatched(keep, merge, out var onlyKeep, out var onlyMerge);
+            if (onlyKeep.Count == 0 && onlyMerge.Count == 0)
+                return result;
+            var counts = keep.Count == merge.Count ? $"{keep.Count} each" : $"{keep.Count} vs {merge.Count}";
+            if (onlyKeep.Count == 1 && onlyMerge.Count == 1)
+            {
+                result.Add($"{aspect} ({counts}): keep '{onlyKeep[0]}' vs merge '{onlyMerge[0]}'");
+                return result;
+            }
+
+            var line = $"{aspect} ({counts}): {onlyKeep.Count} only on keep, {onlyMerge.Count} only on merge";
+            if (onlyKeep.Count > 0)
+                line += "; keep e.g. " + string.Join(" | ", onlyKeep.Take(examples).Select(t => "'" + t + "'"));
+            if (onlyMerge.Count > 0)
+                line += "; merge e.g. " + string.Join(" | ", onlyMerge.Take(examples).Select(t => "'" + t + "'"));
+            result.Add(line);
+            return result;
+        }
+
+        /// <summary>True when the two drawings match within tolerance (hash equality is the fast path).</summary>
+        public static bool SameDrawing(Drawing a, Drawing b)
+        {
+            if (a == null || b == null)
+                return false;
+            if (a.Hash == b.Hash)
+                return true;
+            foreach (var aspect in a.Aspects.Keys.Union(b.Aspects.Keys))
+                if (!SameTokens(a.Tokens(aspect), b.Tokens(aspect)))
+                    return false;
+            return true;
+        }
+
+        /// <summary>Which aspects of two drawings differ and how (empty when they match within tolerance).</summary>
+        public static List<string> DrawingDifferences(Drawing keep, Drawing merge)
+        {
+            var result = new List<string>();
+            if (keep == null || merge == null || keep.Hash == merge.Hash)
+                return result;
+            foreach (var aspect in keep.Aspects.Keys.Union(merge.Aspects.Keys).OrderBy(k => k, StringComparer.Ordinal))
+                result.AddRange(TokenDifferences(aspect, keep.Tokens(aspect), merge.Tokens(aspect)));
+            return result;
+        }
+
+        /// <summary>A family's drawing: tokens per aspect (lines, regions, texts, forms, nested, imports, other, category).</summary>
+        public sealed class Drawing
+        {
+            public static readonly Drawing Empty = CreateEmpty();
+
+            public SortedDictionary<string, List<string>> Aspects { get; } = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+            public DrawingSummary Summary { get; } = new DrawingSummary();
+            public string Hash { get; private set; } = "";
+
+            private static Drawing CreateEmpty()
+            {
+                var drawing = new Drawing();
+                drawing.Seal();
+                return drawing;
+            }
+
+            public void Add(string aspect, string token)
+            {
+                if (!Aspects.TryGetValue(aspect, out var list))
+                    Aspects[aspect] = list = new List<string>();
+                list.Add(token);
+            }
+
+            public IList<string> Tokens(string aspect) => Aspects.TryGetValue(aspect, out var list) ? list : (IList<string>)new List<string>();
+
+            public void Seal()
+            {
+                foreach (var list in Aspects.Values)
+                    list.Sort(StringComparer.Ordinal);
+                Hash = FamilyFingerprint.Hash(Aspects.SelectMany(a => a.Value.Select(t => a.Key + ":" + t)));
+            }
+        }
+
         /// <summary>Counts of the drawn elements found in a family (reported to the user).</summary>
         public class DrawingSummary
         {
+            private readonly SortedDictionary<string, int> _other = new SortedDictionary<string, int>(StringComparer.Ordinal);
+
             public int Lines { get; set; }
             public int Regions { get; set; }
             public int Texts { get; set; }
@@ -362,8 +615,15 @@ namespace RevitMCPCommandSet.Services.Library
             public int Imports { get; set; }
             public int Other { get; set; }
 
+            public void AddOther(string kind)
+            {
+                Other++;
+                _other[kind] = _other.TryGetValue(kind, out var n) ? n + 1 : 1;
+            }
+
             public override string ToString() =>
-                $"{Lines} lines, {Regions} regions, {Texts} texts/labels, {Forms} forms, {Nested} nested, {Imports} imports, {Other} other";
+                $"{Lines} lines, {Regions} regions, {Texts} texts/labels, {Forms} forms, {Nested} nested, {Imports} imports, {Other} other" +
+                (_other.Count > 0 ? " (" + string.Join(", ", _other.Select(o => o.Value + " " + o.Key)) + ")" : "");
         }
     }
 }

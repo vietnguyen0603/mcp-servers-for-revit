@@ -64,7 +64,11 @@ export function registerMergeDuplicateFamiliesTool(server: McpServer) {
     "merge_duplicate_families",
     "Find duplicate families/types in the same category and merge them: instances switch to the kept type, element-id type parameters and default types that point at the duplicate are re-pointed, " +
       "then the duplicate type is deleted (its family too when all of its types merged). Only merges when ALL type parameter values match (name/identity params skipped) AND the drawn geometry matches: " +
-      "fingerprint = FamilySymbol geometry (solids/curves) + the family opened read-only (lines with style/length/end points, filled regions, text/labels, forms, nested placement, imports; 1e-4 ft tolerance). " +
+      "fingerprint = FamilySymbol geometry (solids/curves) + the family opened read-only (lines with style/length/end points, filled regions, text/labels, forms with extrusion depth/extents, nested placement, imports, other); " +
+      "no ids or names, order- and direction-independent, numbers in mm compared within 0.05 + 1e-5 relative. When geometry differs, 'differences' says which aspect and how (e.g. forms: keep '... depth=400' vs merge '... depth=500'). " +
+      "When every type of a duplicate family merges, the whole family is deleted (with its own types/subcategories/internal elements); otherwise the merged types are deleted. A deletion that would also remove real model content " +
+      "(instances, views, tags/dimensions, grouped elements) is skipped and reported in deleted[].blockedBy. deleted[] lists each family/type removed (or wouldDelete in a dry run). " +
+      "counts.familiesBefore/After = all loadable families in the document (same meaning in auto and pairs mode); counts.candidateFamilies = families whose types were considered. " +
       "Keep order: the type others depend on (referenced by other types, default type, used in groups), then preferNamePattern, then the un-numbered name (not 'X 2'), then the most used. " +
       "Instances inside detail/model groups or nested in other families are never switched; that type is kept and reported. " +
       "pairs [{keep, merge}] forces the choice (still compared unless force:true). dryRun (default true) reports counts: families before/after, types merged, instances switched, skipped, not merged (with differences), warnings.",

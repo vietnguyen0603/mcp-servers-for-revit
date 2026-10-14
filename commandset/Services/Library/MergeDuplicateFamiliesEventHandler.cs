@@ -65,8 +65,9 @@ namespace RevitMCPCommandSet.Services.Library
 
             context.ScanUsage(plan.SelectMany(i => new[] { i.Keep, i.Merge }));
 
-            var familiesBefore = new FilteredElementCollector(doc).OfClass(typeof(Family)).Cast<Family>()
-                .Count(f => SourceDocumentUtils.InCategories(f.FamilyCategory, categories));
+            // Always every loadable family in the document (any category, any mode); candidateFamilies is the scope.
+            var familiesBefore = new FilteredElementCollector(doc).OfClass(typeof(Family)).GetElementCount();
+            var candidateFamilies = context.CandidateFamilies;
 
             List<Deletion> deletions;
             if (dryRun)
@@ -109,7 +110,9 @@ namespace RevitMCPCommandSet.Services.Library
             {
                 ["familiesBefore"] = familiesBefore,
                 ["familiesAfter"] = familiesBefore - familiesDeleted,
+                ["candidateFamilies"] = candidateFamilies,
                 ["familiesDeleted"] = familiesDeleted,
+                ["typesDeleted"] = deletions.Where(d => !d.IsFamily && d.Done).Sum(d => d.Items.Count),
                 ["typesMerged"] = typesMerged,
                 ["typesKeptPartially"] = plan.Count(i => !i.Deleted && !i.Failed),
                 ["instancesSwitched"] = plan.Sum(i => i.Switched),
@@ -127,16 +130,19 @@ namespace RevitMCPCommandSet.Services.Library
                 ["dryRun"] = dryRun,
                 ["force"] = force,
                 ["counts"] = counts,
+                ["countsNote"] = "familiesBefore/After = all loadable families in the document (every category, both modes); candidateFamilies = families whose types were considered (scope or pairs).",
                 ["merges"] = new JArray(results.Take(maxResults)),
+                ["deleted"] = new JArray(deletions.Take(maxResults).Select(d => DescribeDeletion(d, dryRun))),
                 ["notMerged"] = new JArray(notMerged.Take(maxResults)),
                 ["warnings"] = warnings,
-                ["fingerprint"] = "type parameters (names/identity skipped) + FamilySymbol geometry + family drawing (EditFamily read-only: lines, regions, text/labels, forms, nested placement, imports; coordinates to 1e-4 ft)"
+                ["fingerprint"] = "type parameters (names/identity skipped) + FamilySymbol geometry + family drawing (EditFamily read-only: lines, regions, text/labels, forms, nested placement, imports, other); " +
+                                  "no ids or names; compared order-independently in mm within 0.05 + 1e-5 relative"
             };
-            if (results.Count > maxResults || notMerged.Count > maxResults)
+            if (results.Count > maxResults || notMerged.Count > maxResults || deletions.Count > maxResults)
                 response["truncated"] = $"Lists capped at maxResults ({maxResults}).";
 
             var message = (dryRun ? "Dry run: would merge " : "Merged ") +
-                          $"{typesMerged} types ({familiesDeleted} families removed, {familiesBefore} -> {familiesBefore - familiesDeleted}), " +
+                          $"{typesMerged} types ({familiesDeleted} families removed, families in document {familiesBefore} -> {familiesBefore - familiesDeleted}; {candidateFamilies} candidate families), " +
                           $"{counts["instancesSwitched"]} instances switched, {counts["instancesSkippedInGroups"]} skipped in groups, {notMerged.Count} candidates not merged." +
                           (dryRun ? " Nothing changed; run with dryRun:false to apply." : "");
             return Ok(message, response);
@@ -149,7 +155,7 @@ namespace RevitMCPCommandSet.Services.Library
         {
             var candidates = scope.Select(context.Get).ToList();
             var groups = candidates
-                .GroupBy(c => c.CategoryId + "|" + c.ClassName + "|" + c.ParamHash + "|" + c.GeometryHash)
+                .GroupBy(c => c.CategoryId + "|" + c.ClassName + "|" + c.ParamHash)
                 .Where(g => g.Count() > 1)
                 .ToList();
 
@@ -157,7 +163,8 @@ namespace RevitMCPCommandSet.Services.Library
             foreach (var group in groups)
             {
                 var members = group.ToList();
-                var byDrawing = new Dictionary<string, List<Candidate>>();
+                // Same type parameters: split by type geometry + drawing, both compared within tolerance.
+                var byGeometry = new List<List<Candidate>>();
                 foreach (var member in members)
                 {
                     var drawing = context.Drawing(member, out var error);
@@ -171,24 +178,28 @@ namespace RevitMCPCommandSet.Services.Library
                         continue;
                     }
 
-                    if (!byDrawing.TryGetValue(drawing, out var list))
-                        byDrawing[drawing] = list = new List<Candidate>();
-                    list.Add(member);
+                    var home = byGeometry.FirstOrDefault(l => SameGeometry(context, l[0], member));
+                    if (home == null)
+                        byGeometry.Add(home = new List<Candidate>());
+                    home.Add(member);
                 }
 
-                if (byDrawing.Count > 1)
+                if (byGeometry.Count > 1)
                     notMerged.Add(new JObject
                     {
                         ["types"] = new JArray(members.Select(Describe)),
-                        ["reason"] = $"Same type parameters but the drawn geometry differs ({byDrawing.Count} different drawings).",
-                        ["drawings"] = new JArray(byDrawing.Values.Select(l => new JObject
+                        ["reason"] = $"Same type parameters but the geometry differs ({byGeometry.Count} different drawings).",
+                        ["drawings"] = new JArray(byGeometry.Select(l => new JObject
                         {
                             ["types"] = new JArray(l.Select(c => c.DisplayName)),
-                            ["content"] = context.DrawingSummary(l[0])
+                            ["content"] = context.DrawingSummary(l[0]),
+                            ["differencesFromFirst"] = l == byGeometry[0]
+                                ? null
+                                : new JArray(GeometryDifferences(context, byGeometry[0][0], l[0]).Take(10))
                         }))
                     });
 
-                clusters.AddRange(byDrawing.Values.Where(l => l.Count > 1));
+                clusters.AddRange(byGeometry.Where(l => l.Count > 1));
             }
 
             if (clusters.Count == 0)
@@ -303,8 +314,12 @@ namespace RevitMCPCommandSet.Services.Library
                 var mergeDrawing = context.Drawing(mergeTypes[0], out var mergeError);
                 if (keepDrawing == null || mergeDrawing == null)
                     throw new ArgumentException("Drawing not compared: " + (keepError ?? mergeError) + " Use force:true to merge anyway.");
-                if (keepDrawing != mergeDrawing)
-                    throw new ArgumentException($"The drawn geometry differs (keep: {context.DrawingSummary(keepTypes[0])}; merge: {context.DrawingSummary(mergeTypes[0])}). Use force:true to merge anyway.");
+                if (!FamilyFingerprint.SameDrawing(keepDrawing, mergeDrawing))
+                {
+                    entry["types"] = new JArray(Describe(keepTypes[0]), Describe(mergeTypes[0]));
+                    entry["differences"] = new JArray(FamilyFingerprint.DrawingDifferences(keepDrawing, mergeDrawing).Take(25));
+                    throw new ArgumentException($"The drawn geometry differs (keep: {context.DrawingSummary(keepTypes[0])}; merge: {context.DrawingSummary(mergeTypes[0])}); see 'differences'. Use force:true to merge anyway.");
+                }
             }
 
             var items = new List<MergeItem>();
@@ -312,8 +327,8 @@ namespace RevitMCPCommandSet.Services.Library
             foreach (var merge in mergeTypes)
             {
                 var sameName = keepTypes.FirstOrDefault(k => string.Equals(k.TypeName, merge.TypeName, StringComparison.OrdinalIgnoreCase));
-                var target = keepTypes.FirstOrDefault(k => k.ParamHash == merge.ParamHash && k.GeometryHash == merge.GeometryHash && k == sameName)
-                             ?? keepTypes.FirstOrDefault(k => k.ParamHash == merge.ParamHash && k.GeometryHash == merge.GeometryHash);
+                var target = (sameName != null && sameName.ParamHash == merge.ParamHash && SameTypeGeometry(sameName, merge) ? sameName : null)
+                             ?? keepTypes.FirstOrDefault(k => k.ParamHash == merge.ParamHash && SameTypeGeometry(k, merge));
                 if (target == null && force)
                     target = sameName ?? (keepTypes.Count == 1 ? keepTypes[0] : null);
                 if (target != null)
@@ -343,14 +358,44 @@ namespace RevitMCPCommandSet.Services.Library
         private static List<string> Compare(Context context, Candidate keep, Candidate merge)
         {
             var reasons = FamilyFingerprint.Differences(keep.Parameters, merge.Parameters).Select(d => "parameter " + d).ToList();
-            if (keep.GeometryHash != merge.GeometryHash)
-                reasons.Add("type geometry differs");
+            reasons.AddRange(GeometryDifferences(context, keep, merge));
+            return reasons;
+        }
+
+        private static bool SameTypeGeometry(Candidate a, Candidate b)
+        {
+            return a.GeometryHash == b.GeometryHash || !a.GeometryKnown || !b.GeometryKnown ||
+                   FamilyFingerprint.SameTokens(a.GeometryTokens, b.GeometryTokens);
+        }
+
+        /// <summary>Type geometry and family drawing match within tolerance (drawing errors count as different).</summary>
+        private static bool SameGeometry(Context context, Candidate a, Candidate b)
+        {
+            if (!SameTypeGeometry(a, b))
+                return false;
+            if (a.Family != null && b.Family != null && a.Family.Id == b.Family.Id)
+                return true;
+            return FamilyFingerprint.SameDrawing(context.Drawing(a, out _), context.Drawing(b, out _));
+        }
+
+        /// <summary>What differs in the type geometry and the family drawing, aspect by aspect.</summary>
+        private static List<string> GeometryDifferences(Context context, Candidate keep, Candidate merge)
+        {
+            var reasons = new List<string>();
+            if (!SameTypeGeometry(keep, merge))
+                reasons.AddRange(FamilyFingerprint.TokenDifferences("type geometry", keep.GeometryTokens, merge.GeometryTokens));
+            if (keep.Family != null && merge.Family != null && keep.Family.Id == merge.Family.Id)
+                return reasons;
             var keepDrawing = context.Drawing(keep, out var keepError);
             var mergeDrawing = context.Drawing(merge, out var mergeError);
             if (keepDrawing == null || mergeDrawing == null)
                 reasons.Add("drawing not compared: " + (keepError ?? mergeError));
-            else if (keepDrawing != mergeDrawing)
+            else if (!FamilyFingerprint.SameDrawing(keepDrawing, mergeDrawing))
+            {
                 reasons.Add($"drawn geometry differs (keep: {context.DrawingSummary(keep)}; merge: {context.DrawingSummary(merge)})");
+                reasons.AddRange(FamilyFingerprint.DrawingDifferences(keepDrawing, mergeDrawing).Select(d => "drawing " + d));
+            }
+
             return reasons;
         }
 
@@ -511,12 +556,21 @@ namespace RevitMCPCommandSet.Services.Library
             public bool IsFamily;
             public bool Done;
             public List<MergeItem> Items = new List<MergeItem>();
+            public string Name;
+            public List<string> TypeNames = new List<string>();
+            public int AlsoDeleted;
+            public List<string> Blockers = new List<string>();
         }
 
         /// <summary>
         ///     Deletes (or, in a dry run, checks) the fully merged types; the family is deleted
-        ///     instead when all of its types are merged away. A deletion that would take any
-        ///     non-type element with it (an instance not switched, a view ...) is skipped.
+        ///     instead when all of its types are merged away (the last type of a family can't be
+        ///     deleted alone). Dependents that belong to the family itself (types, subcategories,
+        ///     internal category-less elements) go with it; a deletion that would take real model
+        ///     content (an instance, a view, a tag/dimension in a view, a grouped element ...) is
+        ///     skipped and the blockers are reported with class/category. The document is
+        ///     regenerated first so switched instances no longer count as dependents, and a
+        ///     deletion that still removes a switched instance is rolled back.
         ///     Runs inside the caller's transaction when not a dry run.
         /// </summary>
         private static List<Deletion> DeleteMerged(Document doc, List<MergeItem> plan, bool dryRun)
@@ -535,23 +589,45 @@ namespace RevitMCPCommandSet.Services.Library
                     deletions.AddRange(byFamily.Select(i => new Deletion { Id = i.Merge.Id, Items = new List<MergeItem> { i } }));
             }
 
+            var protectedIds = new HashSet<long>(plan.SelectMany(i => i.Merge.Instances.Concat(i.Keep.Instances)).Select(id => id.GetValue()));
+
+            // The switched instances must leave the dependency graph before it is read.
+            if (!dryRun)
+            {
+                try
+                {
+                    doc.Regenerate();
+                }
+                catch (Exception)
+                {
+                    // Deletion below still checks the dependents.
+                }
+            }
+
             foreach (var deletion in deletions)
             {
+                var element = doc.GetElement(deletion.Id);
+                deletion.Name = element is Family family ? family.Name
+                    : deletion.Items.Count > 0 ? deletion.Items[0].Merge.DisplayName : element?.Name;
+                deletion.TypeNames = deletion.Items.Select(i => i.Merge.TypeName).ToList();
+
                 // In a dry run the instances are not switched yet; they would be by then.
                 var allowed = dryRun
                     ? new HashSet<long>(deletion.Items.SelectMany(i => i.Merge.Instances).Select(id => id.GetValue()))
                     : new HashSet<long>();
-                var blockers = Blockers(doc, deletion.Id, allowed);
+                var dependents = Dependents(doc, deletion.Id, allowed, out var blockers);
                 if (blockers.Count > 0)
                 {
                     foreach (var item in deletion.Items)
-                        item.AddWarning($"Not deleted: would also delete {blockers.Count} other element(s), e.g. {string.Join(", ", blockers.Take(5))}.");
+                        item.AddWarning($"Not deleted: deleting {(deletion.IsFamily ? "family" : "type")} '{deletion.Name}' would also delete {blockers.Count} model element(s), e.g. {string.Join(", ", blockers.Take(5))}.");
+                    deletion.Blockers = blockers;
                     continue;
                 }
 
                 if (dryRun)
                 {
                     deletion.Done = true;
+                    deletion.AlsoDeleted = dependents;
                 }
                 else
                 {
@@ -559,9 +635,21 @@ namespace RevitMCPCommandSet.Services.Library
                     sub.Start();
                     try
                     {
-                        doc.Delete(deletion.Id);
+                        var deleted = doc.Delete(deletion.Id) ?? new List<ElementId>();
+                        // Safety net: never take a switched (or kept) instance with the duplicate.
+                        var lost = deleted.Where(d => protectedIds.Contains(d.GetValue())).Select(d => d.GetValue()).ToList();
+                        if (lost.Count > 0)
+                        {
+                            sub.RollBack();
+                            deletion.Blockers = lost.Select(d => d + " (switched instance)").ToList();
+                            foreach (var item in deletion.Items)
+                                item.AddWarning($"Not deleted: deleting '{deletion.Name}' would also delete {lost.Count} switched instance(s), e.g. {string.Join(", ", lost.Take(5))}.");
+                            continue;
+                        }
+
                         sub.Commit();
                         deletion.Done = true;
+                        deletion.AlsoDeleted = deleted.Count(id => id != deletion.Id);
                     }
                     catch (Exception ex)
                     {
@@ -583,20 +671,69 @@ namespace RevitMCPCommandSet.Services.Library
             return deletions;
         }
 
-        private static List<long> Blockers(Document doc, ElementId id, HashSet<long> allowed)
+        /// <summary>
+        ///     Elements that would be deleted with <paramref name="id" />. Returns how many there are and, in
+        ///     <paramref name="blockers" />, the ones that are real model content ("id (Class/Category)"):
+        ///     family instances, views, view-specific elements (tags, dimensions, detail items), grouped
+        ///     elements and any other element with a model/annotation/analytical category. Types,
+        ///     subcategories, families and internal category-less elements owned by the family are fine.
+        /// </summary>
+        private static int Dependents(Document doc, ElementId id, HashSet<long> allowed, out List<string> blockers)
         {
+            blockers = new List<string>();
             var element = doc.GetElement(id);
             if (element == null)
-                return new List<long>();
-            return element.GetDependentElements(null)
-                .Where(dep => dep != id && !allowed.Contains(dep.GetValue()))
-                .Where(dep =>
-                {
-                    var dependent = doc.GetElement(dep);
-                    return dependent != null && !(dependent is ElementType) && !(dependent is GraphicsStyle) && !(dependent is Family);
-                })
-                .Select(dep => dep.GetValue())
-                .ToList();
+                return 0;
+            var count = 0;
+            foreach (var dep in element.GetDependentElements(null))
+            {
+                if (dep == id)
+                    continue;
+                var dependent = doc.GetElement(dep);
+                if (dependent == null)
+                    continue;
+                count++;
+                if (allowed.Contains(dep.GetValue()) || !IsModelContent(dependent))
+                    continue;
+                blockers.Add($"{dep.GetValue()} ({dependent.GetType().Name}/{dependent.Category?.Name ?? "no category"})");
+            }
+
+            return count;
+        }
+
+        private static bool IsModelContent(Element element)
+        {
+            if (element is ElementType || element is GraphicsStyle || element is Family || element is Material)
+                return false;
+            if (element is FamilyInstance || element is View)
+                return true;
+            if (element.OwnerViewId != null && element.OwnerViewId != ElementId.InvalidElementId)
+                return true;
+            if (element.GroupId != null && element.GroupId != ElementId.InvalidElementId)
+                return true;
+            var category = element.Category;
+            if (category == null)
+                return false;
+            return category.CategoryType == CategoryType.Model || category.CategoryType == CategoryType.Annotation ||
+                   category.CategoryType == CategoryType.AnalyticalModel;
+        }
+
+        private static JObject DescribeDeletion(Deletion deletion, bool dryRun)
+        {
+            var entry = new JObject
+            {
+                ["kind"] = deletion.IsFamily ? "family" : "type",
+                ["id"] = deletion.Id.GetValue(),
+                ["name"] = deletion.Name,
+                ["status"] = deletion.Done ? (dryRun ? "wouldDelete" : "deleted") : "kept"
+            };
+            if (deletion.IsFamily)
+                entry["mergedTypes"] = new JArray(deletion.TypeNames);
+            if (deletion.Done)
+                entry["alsoDeleted"] = deletion.AlsoDeleted;
+            if (deletion.Blockers.Count > 0)
+                entry["blockedBy"] = new JArray(deletion.Blockers.Take(MaxListedIds));
+            return entry;
         }
 
         private static bool SafeSet(Parameter parameter, ElementId value)
@@ -709,8 +846,13 @@ namespace RevitMCPCommandSet.Services.Library
                 ClassName = type.GetType().Name;
                 Parameters = FamilyFingerprint.TypeParameters(type, ignore);
                 ParamHash = FamilyFingerprint.Hash(Parameters);
-                GeometryHash = FamilyFingerprint.TypeGeometry(type);
+                GeometryTokens = FamilyFingerprint.TypeGeometry(type);
+                GeometryHash = GeometryTokens.Count == 0 ? "" : FamilyFingerprint.Hash(GeometryTokens);
+                // An inactive symbol (never placed) may return no geometry; then only the drawing decides.
+                GeometryKnown = GeometryTokens.Count > 0 || !(type is FamilySymbol fs && !fs.IsActive);
             }
+
+            public bool GeometryKnown { get; }
 
             public ElementType Type { get; }
             public ElementId Id { get; }
@@ -724,6 +866,7 @@ namespace RevitMCPCommandSet.Services.Library
             public SortedDictionary<string, KeyValuePair<string, string>> Parameters { get; }
             public string ParamHash { get; }
             public string GeometryHash { get; }
+            public List<string> GeometryTokens { get; }
 
             public bool UsageScanned { get; set; }
             public List<ElementId> Instances { get; } = new List<ElementId>();
@@ -768,7 +911,7 @@ namespace RevitMCPCommandSet.Services.Library
         private class Context
         {
             private readonly Dictionary<long, Candidate> _candidates = new Dictionary<long, Candidate>();
-            private readonly Dictionary<long, (string Hash, string Summary, string Error)> _drawings = new Dictionary<long, (string, string, string)>();
+            private readonly Dictionary<long, (FamilyFingerprint.Drawing Drawing, string Error)> _drawings = new Dictionary<long, (FamilyFingerprint.Drawing, string)>();
             private readonly ISet<string> _ignore;
             private readonly int _maxFamilyOpens;
 
@@ -790,12 +933,12 @@ namespace RevitMCPCommandSet.Services.Library
                 return candidate;
             }
 
-            /// <summary>Family drawing hash ("" for system types), or null with an error.</summary>
-            public string Drawing(Candidate candidate, out string error)
+            /// <summary>Family drawing (empty for system types), or null with an error.</summary>
+            public FamilyFingerprint.Drawing Drawing(Candidate candidate, out string error)
             {
                 error = null;
                 if (candidate.Family == null)
-                    return "";
+                    return FamilyFingerprint.Drawing.Empty;
                 var key = candidate.Family.Id.GetValue();
                 if (!_drawings.TryGetValue(key, out var drawing))
                 {
@@ -806,20 +949,23 @@ namespace RevitMCPCommandSet.Services.Library
                     }
 
                     FamilyOpens++;
-                    var hash = FamilyFingerprint.FamilyDrawing(Doc, candidate.Family, out var summary, out var openError);
-                    _drawings[key] = drawing = (hash, summary.ToString(), openError);
+                    var result = FamilyFingerprint.FamilyDrawing(Doc, candidate.Family, out var openError);
+                    _drawings[key] = drawing = (result, openError);
                 }
 
                 error = drawing.Error;
-                return drawing.Hash;
+                return drawing.Drawing;
             }
 
             public string DrawingSummary(Candidate candidate)
             {
-                return candidate.Family != null && _drawings.TryGetValue(candidate.Family.Id.GetValue(), out var drawing)
-                    ? drawing.Summary
+                return candidate.Family != null && _drawings.TryGetValue(candidate.Family.Id.GetValue(), out var drawing) && drawing.Drawing != null
+                    ? drawing.Drawing.Summary.ToString()
                     : "";
             }
+
+            /// <summary>Distinct loadable families among the types considered (scope or pair families).</summary>
+            public int CandidateFamilies => _candidates.Values.Where(c => c.Family != null).Select(c => c.Family.Id.GetValue()).Distinct().Count();
 
             /// <summary>
             ///     One pass over the model: instances per type (split into switchable, inside
