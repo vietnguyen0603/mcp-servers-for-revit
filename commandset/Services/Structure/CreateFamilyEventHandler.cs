@@ -14,6 +14,9 @@ namespace RevitMCPCommandSet.Services.Structure
     ///     dimensions and the extrusion end is driven by the depth parameter, so the
     ///     types flex like a hand-made family. The family is saved as .rfa, loaded
     ///     into the project and the requested types are created.
+    ///     kind 'column' / 'framing' builds a steel or concrete member with a
+    ///     standard or built-up section (I, box girder, cruciform, rect, circle,
+    ///     pipe, polygon) - see <see cref="SectionFamilyBuilder" />.
     /// </summary>
     public class CreateFamilyEventHandler : JsonParameterEventHandler
     {
@@ -35,6 +38,7 @@ namespace RevitMCPCommandSet.Services.Structure
             var family = FindFamily(doc, spec.Name);
             string path = null;
             JObject flex = null;
+            JObject build = null;
             var built = false;
             if (family == null || spec.Overwrite)
             {
@@ -43,7 +47,18 @@ namespace RevitMCPCommandSet.Services.Structure
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "revit-mcp", "families");
                 Directory.CreateDirectory(folder);
                 path = Path.Combine(folder, spec.Name + ".rfa");
-                flex = BuildFamily(doc.Application, template, path, spec, warnings);
+                if (spec.Section != null)
+                {
+                    build = SectionFamilyBuilder.Build(doc.Application, template, path, spec.Name, spec.Section, warnings);
+                    flex = build["flexTest"] as JObject;
+                    build.Remove("flexTest");
+                    spec.Parametric = build.Value<bool?>("parametric") ?? spec.Section.Parametric;
+                }
+                else
+                {
+                    flex = BuildFamily(doc.Application, template, path, spec, warnings);
+                }
+
                 built = true;
 
                 using (var t = new Transaction(doc, "MCP: Load Family " + spec.Name))
@@ -86,6 +101,18 @@ namespace RevitMCPCommandSet.Services.Structure
                 ["createdTypes"] = types,
                 ["types"] = new JArray(symbols)
             };
+            if (spec.Section != null)
+            {
+                result["kind"] = spec.Kind;
+                result["parametric"] = spec.Parametric;
+                if (build != null)
+                    foreach (var property in build.Properties())
+                        if (property.Name != "parametric")
+                            result[property.Name] = property.Value;
+                if (!spec.Parametric)
+                    warnings.Add("The family has fixed geometry: its types cannot change the section size; build one family per size.");
+            }
+
             if (flex != null) result["flexTest"] = flex;
             if (warnings.Count > 0) result["warnings"] = new JArray(warnings);
             return Ok($"Family '{family.Name}' {(built ? "built and loaded" : "found")}; {types.Count} type(s) created or updated.", result);
@@ -108,9 +135,25 @@ namespace RevitMCPCommandSet.Services.Structure
                 return spec.TemplatePath;
             }
 
-            var names = spec.Kind == "genericModel"
-                ? new[] { "Metric Generic Model.rft", "Generic Model.rft" }
-                : new[] { "Metric Structural Foundation.rft", "Structural Foundation.rft" };
+            string[] names;
+            switch (spec.Kind)
+            {
+                case "genericModel":
+                    names = new[] { "Metric Generic Model.rft", "Generic Model.rft" };
+                    break;
+                case "column":
+                    names = new[] { "Metric Structural Column.rft", "Structural Column.rft" };
+                    break;
+                case "framing":
+                    names = new[]
+                    {
+                        "Metric Structural Framing - Beams and Braces.rft", "Structural Framing - Beams and Braces.rft"
+                    };
+                    break;
+                default:
+                    names = new[] { "Metric Structural Foundation.rft", "Structural Foundation.rft" };
+                    break;
+            }
 
             var roots = new List<string>();
             if (!string.IsNullOrWhiteSpace(app.FamilyTemplatePath)) roots.Add(app.FamilyTemplatePath);
@@ -439,7 +482,25 @@ namespace RevitMCPCommandSet.Services.Structure
                 parameter.Set(value.Value * MmToFeet);
             }
 
-            if (spec.Shape == "circular")
+            if (spec.Section != null)
+            {
+                if (item["parameters"] is JObject values)
+                    foreach (var property in values.Properties())
+                    {
+                        var key = spec.Section.KeyOf(property.Name);
+                        var parameterName = key != null ? spec.Section.NameOf(key) : property.Name;
+                        var parameter = symbol.LookupParameter(parameterName);
+                        if (parameter == null || parameter.IsReadOnly || parameter.StorageType != StorageType.Double)
+                        {
+                            warnings.Add($"{name}: '{parameterName}' is not a settable length type parameter" +
+                                         (spec.Parametric ? "." : " (the family has fixed geometry)."));
+                            continue;
+                        }
+
+                        parameter.Set(property.Value.Value<double>() * MmToFeet);
+                    }
+            }
+            else if (spec.Shape == "circular")
             {
                 SetLength(spec.DiameterName, "diameter");
             }
@@ -461,7 +522,8 @@ namespace RevitMCPCommandSet.Services.Structure
             public string Name, Kind, Shape, Direction, TemplatePath, SaveFolder;
             public string WidthName, LengthName, DiameterName, DepthName;
             public double Width, Length, Diameter, Depth;
-            public bool InstanceDepth, Overwrite;
+            public bool InstanceDepth, Overwrite, Parametric;
+            public SectionFamilySpec Section;
             public List<JObject> Types = new List<JObject>();
 
             public static FamilySpec Read(JObject p)
@@ -471,6 +533,8 @@ namespace RevitMCPCommandSet.Services.Structure
                 if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                     throw new ArgumentException($"'{name}' is not a valid file name.");
                 var kind = p.Value<string>("kind") ?? "foundation";
+                if (kind != "foundation" && kind != "genericModel" && kind != "column" && kind != "framing")
+                    throw new ArgumentException("kind must be 'foundation', 'genericModel', 'column' or 'framing'.");
                 var spec = new FamilySpec
                 {
                     Name = name,
@@ -490,8 +554,18 @@ namespace RevitMCPCommandSet.Services.Structure
                     InstanceDepth = p.Value<bool?>("instanceDepth") ?? false,
                     Overwrite = p.Value<bool?>("overwrite") ?? false
                 };
+                if (p["types"] is JArray typeList)
+                    spec.Types = typeList.OfType<JObject>().ToList();
+                if (kind == "column" || kind == "framing")
+                {
+                    spec.Section = SectionFamilySpec.Read(p, kind);
+                    spec.Shape = spec.Section.Shape;
+                    spec.Parametric = spec.Section.Parametric;
+                    return spec;
+                }
+
                 if (spec.Shape != "rectangular" && spec.Shape != "circular")
-                    throw new ArgumentException("shape must be 'rectangular' or 'circular'.");
+                    throw new ArgumentException("shape must be 'rectangular' or 'circular' for foundation / genericModel.");
                 if (spec.Width <= 0 || spec.Length <= 0 || spec.Diameter <= 0 || spec.Depth <= 0)
                     throw new ArgumentException("Sizes must be positive.");
                 if (p["types"] is JArray types)
@@ -501,6 +575,7 @@ namespace RevitMCPCommandSet.Services.Structure
 
             public IEnumerable<string> ParameterNames()
             {
+                if (Section != null) return Section.ParameterNames(Parametric);
                 return Shape == "circular"
                     ? new[] { DiameterName, DepthName }
                     : new[] { WidthName, LengthName, DepthName };

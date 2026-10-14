@@ -95,6 +95,11 @@ grids were removed afterwards; model counts unchanged (324 columns + 685 piles, 
 Still open: S13 trusses/purlins, S10 CAD link + geometry, S7/S11 custom sections, the client's 2-minute timeout per chunk,
 and `create_family_type` should fail (not warn) on unknown parameters.
 
+S7/S11 (code, live test pending): `create_family` kind `column` / `framing` with shape `I`, `box` (B, H, tw, tf,
+flange `overhang`), `cruciform` (d, bf, tw, tf + second I d2, bf2, tw2, tf2), `rect`, `circle`, `pipe`, `polygon`.
+Section sizes are labelled type parameters; the ends follow the column levels / Member Left-Right. The P181 C1
+"1000x1000x40x40" needs an explicit flange width: two I sections with bf = 1000 would have touching flanges.
+
 ## B6 — pile caps drop when piles are structural columns (2026-10-04)
 
 The user spotted it in 3D. 156 of the 163 caps in the MCP model had their tops at −17,800 (the pile bottoms), not −5,800.

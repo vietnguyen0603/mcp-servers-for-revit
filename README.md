@@ -173,6 +173,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `create_structural_framing_system` | structure | Create a structural beam framing system |
 | `create_structural_columns` | structure | Place structural columns between levels in bulk (inline or CSV/JSON data file) |
 | `create_beams` | structure | Place structural beams on levels in bulk with offsets, justification and join control |
+| `create_family` | structure, architecture | Build a parametric family (.rfa) from a template, load it and create sized types: foundations (barrette / bored pile) or columns and framing with standard or built-up steel sections (I, box girder with flange overhang, cruciform, rect, circle, pipe, polygon); flex-tested before saving |
 | `modify_structural_members` | structure, modify | Edit placed beams/columns by filter: swap type, structural usage, offsets, levels, justification, mark/comments |
 | `summarize_structural_members` | structure | Group placed beams/columns by comments, mark, type, usage or level with counts and elevation ranges |
 | `delete_element` | modify | Delete elements by ID |
