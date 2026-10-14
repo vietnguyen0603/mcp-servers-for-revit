@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { point3Schema } from "./documentationSchemas.js";
+import { point3LengthSchema } from "./lengthInput.js";
 
 /** Text fields shared by create_dimensions and modify_annotations(setDimensionText). */
 const textFields = {
@@ -12,7 +12,7 @@ const textFields = {
   suffix: z.string().max(256).optional().describe("Text after the value, e.g. 'TYP', 'MIN', 'CLR'. Empty string clears"),
   above: z.string().max(256).optional().describe("Text above the dimension line. Empty string clears"),
   below: z.string().max(256).optional().describe("Text below the dimension line, e.g. 'TYP'. Empty string clears"),
-  position: point3Schema
+  position: point3LengthSchema
     .optional()
     .describe(
       "Move the value text to this point (mm, view model coordinates, projected onto the view plane like other points), e.g. to pull a crowded value outside the extension lines"

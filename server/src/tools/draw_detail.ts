@@ -8,8 +8,8 @@ import {
   addTagIds,
   createDetailConverter,
   type DetailConverter,
-  type DetailUnits,
   type Point2,
+  type PointInput,
   resolveTagReference,
   type TagMap,
 } from "../utils/detailUnits.js";
@@ -24,7 +24,9 @@ import {
 
 const CHUNK_SIZE = 150;
 
-const pt = z.object({ x: z.number().finite(), y: z.number().finite() }).strict().describe("Point in the chosen units");
+/** A number in the chosen units, or a string: unitless = chosen units, or with a unit such as 2'-9", 3/4", 300mm (not in px mode). */
+const coord = z.union([z.number().finite(), z.string().min(1).max(64)]);
+const pt = z.object({ x: coord, y: coord }).strict().describe("Point in the chosen units (or unit strings like 2'-9\")");
 const tag = z.string().min(1).max(128).optional().describe("Name to reference this element's ids from dimensions");
 const lineStyle = z.string().min(1).max(256);
 const typeName = z.string().min(1).max(256);
@@ -49,7 +51,7 @@ const lineSchema = z.discriminatedUnion("kind", [
       kind: z.literal("arc"),
       tag,
       center: pt,
-      radius: z.number().positive(),
+      radius: z.union([z.number().positive(), z.string().min(1).max(64)]),
       startAngleDeg: z.number().finite().optional().default(0),
       endAngleDeg: z.number().finite().optional().default(360),
       lineStyle: lineStyle.optional(),
@@ -61,7 +63,7 @@ const lineSchema = z.discriminatedUnion("kind", [
       tag,
       points: z.array(pt).min(2).max(1000),
       closed: z.boolean().optional(),
-      filletRadius: z.number().finite().nonnegative().optional(),
+      filletRadius: z.union([z.number().finite().nonnegative(), z.string().min(1).max(64)]).optional(),
       lineStyle: lineStyle.optional(),
     })
     .strict(),
@@ -103,7 +105,10 @@ const textSchema = z
     at: pt.describe("Top-left of the text box for Left alignment"),
     type: typeName.optional().describe("Text type name, e.g. '1/8\" Arial'"),
     typeId: elementIdSchema.optional(),
-    width: z.number().positive().max(10000).optional().describe("Wrap width: paper mm (px mode: image px)"),
+    width: z
+      .union([z.number().positive().max(10000), z.string().min(1).max(64)])
+      .optional()
+      .describe("Wrap width: paper mm (px mode: image px); a string with a unit (e.g. 3\") is a paper length"),
     align: z.enum(["Left", "Center", "Right"]).optional(),
     rotationDegrees: z.number().finite().optional(),
     leaders: z
@@ -247,26 +252,32 @@ function buildLine(l: LineItem, c: DetailConverter): Built {
   switch (l.kind) {
     case "line":
       return { payload: definedOnly({ start: c.point(l.start), end: c.point(l.end), lineStyle: l.lineStyle }) };
-    case "arc":
+    case "arc": {
       if (l.endAngleDeg <= l.startAngleDeg) return { error: "endAngleDeg must exceed startAngleDeg" };
+      const radius = c.length(l.radius);
+      if (!(radius > 0)) return { error: "radius must be positive" };
       return {
         payload: definedOnly({
           center: c.point(l.center),
-          radius: c.length(l.radius),
+          radius,
           startAngleDeg: l.startAngleDeg,
           endAngleDeg: l.endAngleDeg,
           lineStyle: l.lineStyle,
         }),
       };
-    case "poly":
+    }
+    case "poly": {
+      const filletRadius = l.filletRadius === undefined ? undefined : c.length(l.filletRadius);
+      if (filletRadius !== undefined && filletRadius < 0) return { error: "filletRadius must not be negative" };
       return {
         payload: definedOnly({
           points: l.points.map(c.point),
           closed: l.closed,
-          filletRadius: l.filletRadius === undefined ? undefined : c.length(l.filletRadius),
+          filletRadius,
           lineStyle: l.lineStyle,
         }),
       };
+    }
   }
 }
 
@@ -307,6 +318,8 @@ function buildSymbol(item: SymbolItem, c: DetailConverter): Built {
 type TextItem = z.infer<typeof textSchema>;
 
 function buildText(item: TextItem, c: DetailConverter, viewId: number): Built {
+  const width = item.width === undefined ? undefined : c.paperWidth(item.width);
+  if (width !== undefined && !(width > 0)) return { error: "width must be positive" };
   return {
     payload: definedOnly({
       text: item.text,
@@ -314,7 +327,7 @@ function buildText(item: TextItem, c: DetailConverter, viewId: number): Built {
       viewId,
       textNoteTypeId: item.typeId,
       textNoteTypeName: item.typeId === undefined ? item.type : undefined,
-      width: item.width === undefined ? undefined : c.paperWidth(item.width),
+      width,
       horizontalAlignment: item.align,
       rotationDegrees: item.rotationDegrees,
       leaders: item.leaders?.map((leader) =>
@@ -334,16 +347,19 @@ function buildText(item: TextItem, c: DetailConverter, viewId: number): Built {
 
 type DimensionItem = z.infer<typeof dimensionSchema>;
 
-function convertDimensionText<T extends { position?: Point2 }>(text: T, c: DetailConverter): T {
+function convertDimensionText<T extends { position?: PointInput }>(text: T, c: DetailConverter): T {
   return text.position ? { ...text, position: c.point(text.position) } : text;
 }
 
 /** Direction in model space (unit vector); px mode flips y like points. */
-export function dimensionDirection(direction: DimensionItem["direction"], units: DetailUnits): Point2 | undefined {
+export function dimensionDirection(
+  direction: DimensionItem["direction"],
+  c: Pick<DetailConverter, "units" | "value">
+): Point2 | undefined {
   if (direction === "h") return { x: 1, y: 0 };
   if (direction === "v") return { x: 0, y: 1 };
-  const x = direction.x;
-  const y = units === "px" ? -direction.y : direction.y;
+  const x = c.value(direction.x);
+  const y = c.units === "px" ? -c.value(direction.y) : c.value(direction.y);
   const length = Math.hypot(x, y);
   return length > 1e-9 ? { x: x / length, y: y / length } : undefined;
 }
@@ -361,7 +377,7 @@ function buildDimension(item: DimensionItem, c: DetailConverter, viewId: number,
     if (resolved.warning) warnings.push(resolved.warning);
     references.push(definedOnly({ elementId: resolved.id, end: ref.end }));
   }
-  const direction = dimensionDirection(item.direction, c.units);
+  const direction = dimensionDirection(item.direction, c);
   if (!direction) return { error: "direction vector must not be zero" };
   const through = c.point(item.through);
   // 100 mm span only sets the dimension direction; the references define what is measured.
@@ -531,7 +547,7 @@ export function registerDrawDetailTool(server: McpServer) {
   server.tool(
     "draw_detail",
     "Draw a whole 2D detail in one call by composing create_view (Drafting), create_filled_region, create_detail_lines, place_detail_component, place_annotation_symbol, create_text_note and create_dimensions, in that order (regions -> lines -> components -> symbols -> texts -> dimensions), batched in chunks of 150. " +
-      "Coordinates use `units`: mm/in/ft are real (model) sizes; px is image pixels with y pointing DOWN, converted as mm = (px - origin) / (pxPerPaperInch / scale) * 25.4 with y flipped (default pxPerPaperInch 166.667 = 7000 px across a 42\" sheet; scale from `scale`, createView.scale or the view). `origin` is the input point that maps to model (0,0). Radii and fillet radii use the same units; text `width` is paper mm (px mode: image px). Arc angles are degrees counter-clockwise as seen on paper in every mode. `snapIn` (e.g. 0.25) snaps converted points to that many real inches. " +
+      "Coordinates use `units`: mm/in/ft are real (model) sizes; px is image pixels with y pointing DOWN, converted as mm = (px - origin) / (pxPerPaperInch / scale) * 25.4 with y flipped (default pxPerPaperInch 166.667 = 7000 px across a 42\" sheet; scale from `scale`, createView.scale or the view). `origin` is the input point that maps to model (0,0). Radii and fillet radii use the same units; text `width` is paper mm (px mode: image px). Arc angles are degrees counter-clockwise as seen on paper in every mode. `snapIn` (e.g. 0.25) snaps converted points to that many real inches. Any coordinate, radius or width may also be a string: unitless strings use `units`, strings with a unit such as 2'-9\", 3/4\", 1'-0 1/2\", 300mm are real lengths (not allowed in px mode; a width string with a unit is a paper length). " +
       "Give any element a `tag`; dimensions reference earlier elements by {tag, index?, end?} (index picks one curve of a poly; end: 'curve' for a line perpendicular to the dimension, 'start'/'end' for end points, 'center' etc. for components) or by {elementId, end?}; unknown tags fail that dimension only. " +
       'Example: {"createView":{"name":"FTG DETAIL","scale":12},"units":"in","lines":[{"kind":"poly","tag":"ftg","points":[{"x":0,"y":0},{"x":24,"y":0},{"x":24,"y":12},{"x":0,"y":12}],"closed":true,"lineStyle":"PEN5"}],"texts":[{"text":"#5 CONT.","at":{"x":30,"y":10},"type":"1/8\\" Arial","leaders":[{"end":{"x":12,"y":6}}]}],"dimensions":[{"refs":[{"tag":"ftg","index":3},{"tag":"ftg","index":1}],"through":{"x":0,"y":-6},"direction":"h","type":"Tick"}]}. ' +
       "Returns {viewId, created:{kind:'n/m'}, tags:{tag:[ids]}, failures:[{kind,index,tag,message}], warnings}; isError only when nothing was created.",

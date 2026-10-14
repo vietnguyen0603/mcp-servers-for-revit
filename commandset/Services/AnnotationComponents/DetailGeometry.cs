@@ -250,5 +250,97 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             var lines = Category.GetCategory(doc, BuiltInCategory.OST_Lines);
             return lines.SubCategories.Cast<Category>().Select(c => c.Name).OrderBy(n => n).ToList();
         }
+
+        /// <summary>Projects a point onto the plane through <paramref name="origin" /> with <paramref name="normal" />.</summary>
+        public static XYZ ProjectOnto(XYZ origin, XYZ normal, XYZ point)
+        {
+            var n = normal.Normalize();
+            return point - n.Multiply(n.DotProduct(point - origin));
+        }
+
+        /// <summary>
+        ///     Line (start/end) or arc (start/end/mid) from mm points in <paramref name="spec" />,
+        ///     projected onto the given plane (the element's own sketch plane, so its elevation is kept).
+        /// </summary>
+        public static Curve ReadCurve(XYZ origin, XYZ normal, JToken spec, string what)
+        {
+            if (spec == null)
+                throw new ArgumentException($"'{what}' {{start, end, mid?}} is required.");
+            XYZ Read(string name)
+            {
+                var p = DocumentationUtils.ReadPointMm(spec[name])
+                        ?? throw new ArgumentException($"'{what}.{name}' must be a point {{x, y, z?}} in mm.");
+                return ProjectOnto(origin, normal, p);
+            }
+
+            var start = Read("start");
+            var end = Read("end");
+            if (start.IsAlmostEqualTo(end))
+                throw new ArgumentException($"'{what}' start and end coincide.");
+            if (spec["mid"] == null || spec["mid"].Type == JTokenType.Null)
+                return Line.CreateBound(start, end);
+            var mid = Read("mid");
+            if (mid.IsAlmostEqualTo(start) || mid.IsAlmostEqualTo(end))
+                throw new ArgumentException($"'{what}.mid' coincides with an end point.");
+            var chord = (end - start).Normalize();
+            if ((mid - start).Normalize().IsAlmostEqualTo(chord))
+                return Line.CreateBound(start, end); // collinear mid: a straight line
+            return Arc.Create(start, end, mid);
+        }
+
+        /// <summary>
+        ///     Replaces the location curve of a detail line (DetailCurve.SetGeometryCurve) or a
+        ///     line-based detail/annotation family instance (LocationCurve.Curve). Points are projected
+        ///     onto the element's current plane (sketch plane, else the plane through the existing curve
+        ///     normal to the view direction). Returns the new start/end in mm.
+        /// </summary>
+        public static object ApplyCurve(Document doc, Element element, JToken spec, string what)
+        {
+            var view = doc.GetElement(element.OwnerViewId) as View;
+            if (element is CurveElement curveElement)
+            {
+                XYZ origin;
+                XYZ normal;
+                var plane = curveElement.SketchPlane?.GetPlane();
+                if (plane != null)
+                {
+                    origin = plane.Origin;
+                    normal = plane.Normal;
+                }
+                else
+                {
+                    origin = curveElement.GeometryCurve.GetEndPoint(0);
+                    normal = view?.ViewDirection ?? XYZ.BasisZ;
+                }
+
+                var curve = ReadCurve(origin, normal, spec, what);
+                curveElement.SetGeometryCurve(curve, true);
+                return Describe(element, curve);
+            }
+
+            if (element.Location is LocationCurve location)
+            {
+                var existing = location.Curve;
+                var normal = view?.ViewDirection ?? XYZ.BasisZ;
+                var curve = ReadCurve(existing.GetEndPoint(0), normal, spec, what);
+                location.Curve = curve;
+                return Describe(element, curve);
+            }
+
+            throw new ArgumentException(
+                $"Element {element.Id.GetValue()} ({element.Category?.Name ?? element.GetType().Name}) is not a detail line or line-based item.");
+        }
+
+        private static object Describe(Element element, Curve curve)
+        {
+            return new
+            {
+                elementId = element.Id.GetValue(),
+                start = DocumentationUtils.PointToMm(curve.GetEndPoint(0)),
+                end = DocumentationUtils.PointToMm(curve.GetEndPoint(1)),
+                curveType = curve is Arc ? "arc" : "line",
+                length = DocumentationUtils.FeetToMm(curve.Length)
+            };
+        }
     }
 }

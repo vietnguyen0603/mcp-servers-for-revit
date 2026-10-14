@@ -50,21 +50,36 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     Rotation = (item.Value<double?>("rotationDegrees") ?? 0) * Math.PI / 180
                 };
 
+                var fitWidth = item.Value<bool?>("fitWidth") ?? false;
+                var measure = item.Value<bool?>("measure") ?? false;
                 var width = item.Value<double?>("width");
-                var note = width is double w && w > 0
+                var note = !fitWidth && width is double w && w > 0
                     ? TextNote.Create(doc, view.Id, location, DocumentationUtils.MmToFeet(w), text, options)
                     : TextNote.Create(doc, view.Id, location, text, options);
 
                 TextNoteStyling.ApplyFormat(note, item["format"]);
+                // Fit before leaders: the shoulder positions depend on the final box width.
+                double? fittedWidth = null;
+                if (fitWidth)
+                    fittedWidth = DocumentationUtils.FeetToMm(TextNoteMeasure.FitWidth(doc, note));
                 TextNoteStyling.ApplyAttachments(note, item);
                 TextNoteStyling.AddLeaders(doc, note, view, item["leaders"]);
+
+                object extents = null;
+                if (measure)
+                {
+                    doc.Regenerate();
+                    extents = TextNoteMeasure.Describe(doc, note, TextNoteMeasure.MeasureUnwrapped(doc, note));
+                }
 
                 return new
                 {
                     textNoteId = note.Id.GetValue(),
                     viewId = view.Id.GetValue(),
                     textNoteTypeId = note.GetTypeId().GetValue(),
-                    leaderCount = note.LeaderCount
+                    leaderCount = note.LeaderCount,
+                    fittedWidth,
+                    extents
                 };
             });
 

@@ -111,4 +111,6 @@ now the read-only tools `get_drafting_standards` and `audit_detail_library`. G18
 `search_detail_library`, a keyword search over a per-document SQLite index (FTS5 when available) that is built
 from the `get_drafting_view_index` command.
 G17 CAD cleanup: `trace_cad_import` + `purge_cad_leftovers` added.
+G14: unit strings (`2'-9"`, `3/4"`, `300mm`) on the drafting tools via `server/src/utils/lengthInput.ts`.
+G25: `create_text_note` `fitWidth`/`measure` and `measure_text_notes`.
 None of these have been tested live yet.

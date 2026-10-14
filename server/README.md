@@ -100,14 +100,15 @@ Configure the behaviour with environment variables on the MCP server:
 | `tag_all_walls` | annotate | Tag all walls in the current view |
 | `tag_all_rooms` | annotate | Tag all rooms in the current view |
 | `tag_elements` | annotate | Tag elements of any category in a view (by id or category, skipping already-tagged) |
-| `create_text_note` | annotate | Create text notes in a view or on a sheet |
+| `create_text_note` | annotate | Create text notes in a view or on a sheet (optional fit-to-text width and measured extents) |
+| `measure_text_notes` | annotate | Measure text note extents (paper and model mm), line count and wrapping |
 | `list_drafting_types` | annotate, views | List text, dimension, filled region, line style, viewport and title block types |
 | `get_drafting_standards` | annotate, views | Harvest the styles, types, detail families by role, viewport types, scales and view naming used in drafting views (markdown snapshot or JSON) |
 | `audit_detail_library` | annotate, views | QA the typical-detail library: stale bubbles, unplaced views, naming, non-standard types, CAD leftovers, text overlaps, numeric dim overrides, drawing list |
 | `search_detail_library` | views, annotate, data | Keyword search of drafting views (name, sheet/detail number, note text, family names) via a per-document SQLite index |
 | `create_detail_lines` | annotate | Create detail lines and arcs with a line style |
 | `create_filled_region` | annotate | Create filled or masking regions from boundary loops |
-| `place_detail_component` | annotate | Place point- or line-based detail components |
+| `place_detail_component` | annotate | Place point- or line-based detail components, or copy an existing one to new points |
 | `place_annotation_symbol` | annotate | Place generic annotation symbols (sub-detail titles, weld symbols) with parameters and leaders |
 | `create_revision_cloud` | annotate | Create revision clouds around rectangles or polygons |
 | `create_grid_dimensions` | annotate, structure | Create grid chain and overall dimensions in a view |

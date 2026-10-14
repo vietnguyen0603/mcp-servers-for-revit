@@ -281,7 +281,16 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["tag", "label", "beam", "column", "door", "window", "untagged", "drafting"],
   },
-  create_text_note: { catalogs: ["annotate"], readOnly: false, keywords: ["text", "note", "label", "drafting", "leader"] },
+  create_text_note: {
+    catalogs: ["annotate"],
+    readOnly: false,
+    keywords: ["text", "note", "label", "drafting", "leader", "fit width", "extents", "rotated text", "imperial"],
+  },
+  measure_text_notes: {
+    catalogs: ["annotate"],
+    readOnly: true,
+    keywords: ["text", "note", "extents", "size", "width", "height", "wrap", "bounding box", "drafting"],
+  },
   get_view_annotations: {
     catalogs: ["annotate", "views"],
     readOnly: true,
@@ -291,7 +300,7 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     catalogs: ["annotate"],
     readOnly: false,
     destructive: true,
-    keywords: ["edit", "move", "copy", "rotate", "delete", "text", "line style", "drafting", "2d", "leader", "dimension text", "override", "mirror", "flip"],
+    keywords: ["edit", "move", "copy", "rotate", "delete", "text", "line style", "drafting", "2d", "leader", "dimension text", "override", "mirror", "flip", "set curve", "line-based", "arrow", "imperial"],
   },
   create_detail_lines: {
     catalogs: ["annotate"],

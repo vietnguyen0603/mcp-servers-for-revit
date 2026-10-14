@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { elementIdSchema, point3Schema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { elementIdSchema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { point3LengthSchema } from "../utils/lengthInput.js";
 import { dimensionSegmentsTextSchema, dimensionTextSchema } from "../utils/dimensionSchemas.js";
 
 const referenceSchema = z
@@ -18,11 +19,11 @@ const referenceSchema = z
 
 const dimensionSchema = z
   .object({
-    startPoint: point3Schema
+    startPoint: point3LengthSchema
       .optional()
       .describe("Start of the measured span (mm). With endPoint it sets the dimension direction"),
-    endPoint: point3Schema.optional().describe("End of the measured span (mm)"),
-    linePoint: point3Schema
+    endPoint: point3LengthSchema.optional().describe("End of the measured span (mm)"),
+    linePoint: point3LengthSchema
       .optional()
       .describe("A point the dimension line passes through (mm); defaults to startPoint"),
     references: z
@@ -73,7 +74,7 @@ const dimensionSchema = z
 export function registerCreateDimensionsTool(server: McpServer) {
   server.tool(
     "create_dimensions",
-    "Create linear dimensions (mm) in a view, drafting view or plan. Three ways to pick what is measured: (1) references: explicit element references in chain order - in drafting/detail views reference detail lines ('curve' for lines perpendicular to the dimension, 'start'/'end' for line end points) to build one multi-segment chain; (2) startPoint/endPoint alone: each point snaps to the nearest detail line, line end point or detail component within snapToleranceMm, and the call fails instead of creating a 0 or single-reference dimension; (3) elementIds: faces of walls/doors/windows along startPoint->endPoint. Set text overrides/prefix/suffix/above/below with 'text' (all segments) or 'segments' (per index); 'position' (mm) moves a value's text, e.g. out of a tight space, and 'leader' toggles the dimension's text leader. Pass dimensionStyleId (type id from get_view_annotations or a type listing) to avoid resolving a similarly named type such as '... - Blank'. Returns per dimension: id, segment count, values in mm, referenced element ids and text warnings.",
+    "Create linear dimensions in a view, drafting view or plan. Points are mm numbers or strings with units (2'-9\", 3/4\", 300mm). Three ways to pick what is measured: (1) references: explicit element references in chain order - in drafting/detail views reference detail lines ('curve' for lines perpendicular to the dimension, 'start'/'end' for line end points) to build one multi-segment chain; (2) startPoint/endPoint alone: each point snaps to the nearest detail line, line end point or detail component within snapToleranceMm, and the call fails instead of creating a 0 or single-reference dimension; (3) elementIds: faces of walls/doors/windows along startPoint->endPoint. Set text overrides/prefix/suffix/above/below with 'text' (all segments) or 'segments' (per index); 'position' (mm) moves a value's text, e.g. out of a tight space, and 'leader' toggles the dimension's text leader. Pass dimensionStyleId (type id from get_view_annotations or a type listing) to avoid resolving a similarly named type such as '... - Blank'. Returns per dimension: id, segment count, values in mm, referenced element ids and text warnings.",
     {
       dimensions: z.array(dimensionSchema).min(1).max(200).describe("Dimensions to create"),
     },

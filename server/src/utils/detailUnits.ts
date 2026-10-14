@@ -3,11 +3,21 @@
  * create_drafted_table). Pure functions: no Revit access.
  */
 
+import { hasLengthUnit, parseLength } from "./lengthInput.js";
+
 export type DetailUnits = "mm" | "in" | "ft" | "px";
 
 export interface Point2 {
   x: number;
   y: number;
+}
+
+/** Input coordinate: a number in the chosen units, or a string such as 2'-9" or 300mm. */
+export type Coord = number | string;
+
+export interface PointInput {
+  x: Coord;
+  y: Coord;
 }
 
 export const MM_PER_INCH = 25.4;
@@ -20,7 +30,7 @@ const MM_PER_UNIT: Record<Exclude<DetailUnits, "px">, number> = { mm: 1, in: MM_
 export interface DetailUnitOptions {
   units: DetailUnits;
   /** Input-unit point that maps to model (0,0). */
-  origin?: Point2;
+  origin?: PointInput;
   /** px mode only. */
   pxPerPaperInch?: number;
   /** View scale denominator; required in px mode. */
@@ -33,12 +43,18 @@ export interface DetailConverter {
   units: DetailUnits;
   /** Model millimetres per input unit (px mode: per image pixel). */
   mmPerUnit: number;
+  /**
+   * Input coordinate -> number in the input units. Strings with a unit
+   * (2'-9", 300mm) are converted; unitless strings use the input units.
+   * px mode rejects strings with a unit.
+   */
+  value(value: Coord): number;
   /** Input point -> model mm (px mode flips y; snapped when snapIn is set). */
-  point(p: Point2): Point2;
+  point(p: PointInput): Point2;
   /** Input length (radius, fillet) -> model mm. */
-  length(value: number): number;
-  /** Text width: paper mm, or image px -> paper mm in px mode. */
-  paperWidth(value: number): number;
+  length(value: Coord): number;
+  /** Text width: paper mm, or image px -> paper mm in px mode. A string with a unit is a paper length. */
+  paperWidth(value: Coord): number;
 }
 
 /** Round to 1e-6 mm to keep payloads free of floating-point noise. */
@@ -49,7 +65,6 @@ function clean(value: number): number {
 
 export function createDetailConverter(options: DetailUnitOptions): DetailConverter {
   const units = options.units;
-  const origin = options.origin ?? { x: 0, y: 0 };
   let mmPerUnit: number;
   let ySign = 1;
   if (units === "px") {
@@ -66,16 +81,30 @@ export function createDetailConverter(options: DetailUnitOptions): DetailConvert
   const snapMm = options.snapIn && options.snapIn > 0 ? options.snapIn * MM_PER_INCH : 0;
   const snap = (value: number) => (snapMm ? Math.round(value / snapMm) * snapMm : value);
 
+  const value = (input: Coord): number => {
+    if (typeof input === "number") return input;
+    if (units === "px") {
+      if (hasLengthUnit(input)) throw new Error(`'${input}': lengths with units cannot be used with px units`);
+      return parseLength(input);
+    }
+    return parseLength(input, { defaultUnit: units }) / mmPerUnit;
+  };
+  const origin = { x: value(options.origin?.x ?? 0), y: value(options.origin?.y ?? 0) };
+
   return {
     units,
     mmPerUnit,
+    value,
     point: (p) => ({
-      x: clean(snap((p.x - origin.x) * mmPerUnit)),
-      y: clean(snap(ySign * (p.y - origin.y) * mmPerUnit)),
+      x: clean(snap((value(p.x) - origin.x) * mmPerUnit)),
+      y: clean(snap(ySign * (value(p.y) - origin.y) * mmPerUnit)),
     }),
-    length: (value) => clean(value * mmPerUnit),
-    paperWidth: (value) =>
-      clean(units === "px" ? (value / (options.pxPerPaperInch ?? DEFAULT_PX_PER_PAPER_INCH)) * MM_PER_INCH : value),
+    length: (input) => clean(value(input) * mmPerUnit),
+    paperWidth: (input) => {
+      if (typeof input === "string" && hasLengthUnit(input)) return clean(parseLength(input));
+      const v = typeof input === "number" ? input : parseLength(input);
+      return clean(units === "px" ? (v / (options.pxPerPaperInch ?? DEFAULT_PX_PER_PAPER_INCH)) * MM_PER_INCH : v);
+    },
   };
 }
 
