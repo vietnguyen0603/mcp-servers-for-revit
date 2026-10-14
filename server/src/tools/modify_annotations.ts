@@ -3,24 +3,49 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   elementIdSchema,
   parameterValuesSchema,
-  point3Schema,
   sendDocumentationCommand,
 } from "../utils/documentationSchemas.js";
+import { point3LengthSchema } from "../utils/lengthInput.js";
 import { leaderAttachmentSchema, textNoteLeadersSchema } from "./create_text_note.js";
 import { dimensionSegmentsTextSchema, dimensionTextSchema } from "../utils/dimensionSchemas.js";
 
 const elementIds = z.array(elementIdSchema).min(1).max(1000).describe("Elements to change");
 
+const curveFields = {
+  start: point3LengthSchema.describe("Start point (mm or unit string per coordinate)"),
+  end: point3LengthSchema.describe("End point"),
+  mid: point3LengthSchema.optional().describe("A point on the arc between start and end (arcs only)"),
+};
+
+/** Target curve for setCurve / copy: a line start->end, or an arc through mid. */
+export const curveTargetSchema = z.object(curveFields).strict();
+
 const operationSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("move"), elementIds, delta: point3Schema.describe("Translation (mm)") }).strict(),
+  z.object({ action: z.literal("move"), elementIds, delta: point3LengthSchema.describe("Translation (mm)") }).strict(),
   z
-    .object({ action: z.literal("copy"), elementIds, delta: point3Schema.describe("Offset of the copies (mm)") })
-    .strict(),
+    .object({
+      action: z.literal("copy"),
+      elementIds,
+      delta: point3LengthSchema.optional().describe("Offset of the copies (mm)"),
+      curve: curveTargetSchema
+        .optional()
+        .describe("Copy one line-based detail item / detail line in place and give the copy this start/end (mid = arc)"),
+      copyTo: z
+        .array(curveTargetSchema)
+        .min(1)
+        .max(500)
+        .optional()
+        .describe("Like curve, one copy per entry (e.g. many arrows/break lines from one hand-placed item)"),
+    })
+    .strict()
+    .describe(
+      "Copy elements by delta; or copy ONE line-based detail item (e.g. an arrow or break line family that cannot be placed directly) or detail line to new start/end via curve/copyTo"
+    ),
   z
     .object({
       action: z.literal("rotate"),
       elementIds,
-      center: point3Schema.describe("Rotation centre (mm)"),
+      center: point3LengthSchema.describe("Rotation centre (mm)"),
       angleDeg: z.number().finite().describe("Counter-clockwise angle in the view plane"),
     })
     .strict(),
@@ -37,11 +62,21 @@ const operationSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("setLine"),
       elementIds: z.array(elementIdSchema).length(1),
-      start: point3Schema,
-      end: point3Schema,
+      start: point3LengthSchema,
+      end: point3LengthSchema,
     })
     .strict()
     .describe("Move the endpoints of one straight detail line (mm)"),
+  z
+    .object({
+      action: z.literal("setCurve"),
+      elementIds,
+      ...curveFields,
+    })
+    .strict()
+    .describe(
+      "Set the location curve of line-based detail items (FamilyInstance LocationCurve) and detail lines/arcs (mm; points are snapped to each element's own sketch plane). Give mid for an arc through start, mid, end"
+    ),
   z
     .object({
       action: z.literal("setType"),
@@ -88,7 +123,7 @@ const operationSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("mirror"),
       elementIds,
-      axis: z.object({ start: point3Schema, end: point3Schema }).strict().describe("Mirror axis in the view plane (mm)"),
+      axis: z.object({ start: point3LengthSchema, end: point3LengthSchema }).strict().describe("Mirror axis in the view plane (mm)"),
       copy: z.boolean().optional().default(false).describe("Keep the originals and mirror copies"),
     })
     .strict()
@@ -104,7 +139,7 @@ const operationSchema = z.discriminatedUnion("action", [
 export function registerModifyAnnotationsTool(server: McpServer) {
   server.tool(
     "modify_annotations",
-    "Edit 2D elements in views and drafting views: move, copy, rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below, text position and leader), addLeaders/setLeaders/removeLeaders (text notes), mirror (about an axis, optionally as copies) and flip (detail components; flipping a break line swaps its masked side). Coordinates are millimetres; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
+    "Edit 2D elements in views and drafting views: move, copy (by delta, or one line-based item/detail line to new start/end with curve/copyTo), rotate, delete, setText (text notes), setLineStyle (detail lines), setLine (endpoints of one detail line), setCurve (new start/end/mid of line-based detail items such as arrows or break lines, and of detail lines/arcs), setType (text/dimension/filled region/detail component types), setParameters, setDimensionText (dimension override/prefix/suffix/above/below, text position and leader), addLeaders/setLeaders/removeLeaders (text notes), mirror (about an axis, optionally as copies) and flip (detail components; flipping a break line swaps its masked side). Coordinates are millimetres (numbers) or strings with units such as 2'-9\", 3/4\", 300mm; use get_view_annotations to find ids and current geometry. All operations are one undo step; each reports its own success.",
     {
       operations: z
         .array(operationSchema)
@@ -114,6 +149,14 @@ export function registerModifyAnnotationsTool(server: McpServer) {
           ops.forEach((op, i) => {
             if (op.action === "setType" && op.typeId === undefined && op.typeName === undefined) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "setType needs typeId or typeName" });
+            }
+            if (op.action === "copy") {
+              const modes = [op.delta, op.curve, op.copyTo].filter((v) => v !== undefined).length;
+              if (modes !== 1) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "copy needs exactly one of delta, curve or copyTo" });
+              } else if (op.delta === undefined && op.elementIds.length !== 1) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "copy with curve/copyTo takes exactly one element" });
+              }
             }
             if (op.action === "setDimensionText" && !op.text && !op.segments) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: "setDimensionText needs text or segments" });

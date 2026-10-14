@@ -108,4 +108,4 @@ Built and merged on `feat/drafting-gaps` (untested live until Revit restarts): `
 
 Still script-based (read-only `send_code_to_revit`): `harvest-standards.cs` (revit-detail-standards) and
 `audit-details.cs` (revit-detail-qa) — candidates for `get_drafting_standards` and `audit_detail_library` tools.
-Still open: G14 imperial strings, G17 CAD cleanup, G18 library search, G25 text extents.
+Still open: G17 CAD cleanup, G18 library search. G14 done: unit strings (`2'-9"`, `3/4"`, `300mm`) on the drafting tools via `server/src/utils/lengthInput.ts`. G25 done: `create_text_note` `fitWidth`/`measure` and `measure_text_notes`.

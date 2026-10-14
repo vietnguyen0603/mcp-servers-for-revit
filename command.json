@@ -184,6 +184,11 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "measure_text_notes",
+      "description": "Measure text note extents, line count and wrapping",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "tag_elements",
       "description": "Tag elements of any category in a view",
       "assemblyPath": "RevitMCPCommandSet.dll"

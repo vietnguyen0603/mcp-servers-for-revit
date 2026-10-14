@@ -1,18 +1,19 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { elementIdSchema, point3Schema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { elementIdSchema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { lengthSchema, point3LengthSchema, positiveLengthSchema } from "../utils/lengthInput.js";
 
 const lineStyle = z.string().min(1).max(256);
 
 const lineItemSchema = z.union([
   z
-    .object({ start: point3Schema, end: point3Schema, lineStyle: lineStyle.optional() })
+    .object({ start: point3LengthSchema, end: point3LengthSchema, lineStyle: lineStyle.optional() })
     .strict()
     .describe("Straight line"),
   z
     .object({
-      center: point3Schema,
-      radius: z.number().positive().describe("Radius in mm"),
+      center: point3LengthSchema,
+      radius: positiveLengthSchema().describe("Radius (mm, or a unit string such as 6\")"),
       startAngleDeg: z.number().finite().optional().default(0),
       endAngleDeg: z.number().finite().optional().default(360),
       lineStyle: lineStyle.optional(),
@@ -22,17 +23,15 @@ const lineItemSchema = z.union([
     .describe("Arc; angles are measured counter-clockwise from the view's right direction. 0–360 draws a full circle"),
   z
     .object({
-      points: z.array(point3Schema).min(2).max(1000),
+      points: z.array(point3LengthSchema).min(2).max(1000),
       closed: z.boolean().optional().default(false),
       lineStyle: lineStyle.optional(),
-      filletRadius: z
-        .number()
-        .finite()
-        .nonnegative()
+      filletRadius: lengthSchema
+        .refine((v) => v >= 0, { message: "must not be negative" })
         .optional()
         .describe("Round every corner with a tangent arc of this radius (mm); end points of open polylines stay sharp"),
       filletRadii: z
-        .array(z.number().finite().nonnegative())
+        .array(lengthSchema.refine((v) => v >= 0, { message: "must not be negative" }))
         .max(1000)
         .optional()
         .describe("Per-vertex fillet radius (mm), one per point (0 = sharp); overrides filletRadius"),
@@ -50,7 +49,7 @@ const lineItemSchema = z.union([
 export function registerCreateDetailLinesTool(server: McpServer) {
   server.tool(
     "create_detail_lines",
-    "Create view-specific detail lines, arcs and polylines in a view or on a sheet. Points are millimetres (model coordinates in model views, sheet coordinates on sheets and drafting views) and are projected onto the view plane. lineStyle is the name of a Lines subcategory such as 'Thin Lines'; an item's lineStyle overrides the request default. Not available in 3D views or schedules.",
+    "Create view-specific detail lines, arcs and polylines in a view or on a sheet. Points and radii are millimetres (numbers) or strings with units such as 2'-9\", 3/4\", 300mm (model coordinates in model views, sheet coordinates on sheets and drafting views) and are projected onto the view plane. lineStyle is the name of a Lines subcategory such as 'Thin Lines'; an item's lineStyle overrides the request default. Not available in 3D views or schedules.",
     {
       viewId: elementIdSchema.optional().describe("View or sheet (default active view)"),
       lineStyle: lineStyle.optional().describe("Default line style for all items"),

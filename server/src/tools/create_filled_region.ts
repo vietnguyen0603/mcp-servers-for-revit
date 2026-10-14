@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { elementIdSchema, point3Schema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { elementIdSchema, sendDocumentationCommand } from "../utils/documentationSchemas.js";
+import { point3LengthSchema } from "../utils/lengthInput.js";
 
-const loopSchema = z.array(point3Schema).min(3).max(1000);
+const loopSchema = z.array(point3LengthSchema).min(3).max(1000);
 
 export function registerCreateFilledRegionTool(server: McpServer) {
   server.tool(
     "create_filled_region",
-    "Create filled regions (or masking regions, Revit 2024+) in a view or on a sheet from an outer boundary polygon and optional hole polygons, in millimetres projected onto the view plane. Choose the type by filledRegionTypeId or filledRegionTypeName (default: project default filled region type). Call with listTypes=true and no regions to list filled region types and line styles.",
+    "Create filled regions (or masking regions, Revit 2024+) in a view or on a sheet from an outer boundary polygon and optional hole polygons, in millimetres (numbers, or strings with units such as 2'-9\", 3/4\", 300mm) projected onto the view plane. Choose the type by filledRegionTypeId or filledRegionTypeName (default: project default filled region type). Call with listTypes=true and no regions to list filled region types and line styles.",
     {
       viewId: elementIdSchema.optional().describe("View or sheet (default active view)"),
       listTypes: z.boolean().optional().describe("With no regions: return filled region types and line styles"),

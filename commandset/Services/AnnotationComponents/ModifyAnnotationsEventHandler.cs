@@ -40,8 +40,41 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
                     return new { action, elementIds = ids.Select(i => i.GetValue()) };
 
                 case "copy":
-                    var copies = ElementTransformUtils.CopyElements(doc, ids, ReadVector(op, "delta"));
-                    return new { action, elementIds = ids.Select(i => i.GetValue()), newIds = copies.Select(i => i.GetValue()) };
+                {
+                    var targets = CurveTargets(op);
+                    if (targets == null)
+                    {
+                        var copies = ElementTransformUtils.CopyElements(doc, ids, ReadVector(op, "delta"));
+                        return new { action, elementIds = ids.Select(i => i.GetValue()), newIds = copies.Select(i => i.GetValue()) };
+                    }
+
+                    // Copy in place, then give each copy its own curve (line-based items and detail lines).
+                    if (elements.Count != 1)
+                        throw new ArgumentException("copy with 'curve' or 'copyTo' takes exactly one element.");
+                    var source = elements[0];
+                    var placed = new List<object>();
+                    var newIds = new List<long>();
+                    for (var i = 0; i < targets.Count; i++)
+                    {
+                        var copy = CopyInPlace(doc, source);
+                        newIds.Add(copy.Id.GetValue());
+                        placed.Add(DetailGeometry.ApplyCurve(doc, copy, targets[i], targets.Count == 1 ? "curve" : $"copyTo[{i}]"));
+                    }
+
+                    return new
+                    {
+                        action,
+                        elementIds = ids.Select(i => i.GetValue()),
+                        newIds,
+                        copies = placed
+                    };
+                }
+
+                case "setCurve":
+                {
+                    var updated = elements.Select(e => DetailGeometry.ApplyCurve(doc, e, op, "setCurve")).ToList();
+                    return new { action, elementIds = ids.Select(i => i.GetValue()), curves = updated };
+                }
 
                 case "rotate":
                 {
@@ -185,7 +218,7 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
 
                 default:
                     throw new ArgumentException(
-                        $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setType, setParameters, addLeaders, setLeaders, removeLeaders, setDimensionText, mirror or flip.");
+                        $"Unknown action '{action}'. Use move, copy, rotate, delete, setText, setLineStyle, setLine, setCurve, setType, setParameters, addLeaders, setLeaders, removeLeaders, setDimensionText, mirror or flip.");
             }
         }
 
@@ -209,6 +242,38 @@ namespace RevitMCPCommandSet.Services.AnnotationComponents
             if (missing.Count > 0)
                 throw new ArgumentException($"Elements not found: {string.Join(", ", missing)}.");
             return elements;
+        }
+
+        /// <summary>Curve specs for copy: [curve] or the copyTo array; null for a plain delta copy.</summary>
+        private static List<JToken> CurveTargets(JObject op)
+        {
+            var hasDelta = op["delta"] != null && op["delta"].Type != JTokenType.Null;
+            var curve = op["curve"] != null && op["curve"].Type != JTokenType.Null ? op["curve"] : null;
+            var copyTo = op["copyTo"] as JArray;
+            var given = (hasDelta ? 1 : 0) + (curve != null ? 1 : 0) + (copyTo != null ? 1 : 0);
+            if (given != 1)
+                throw new ArgumentException("copy needs exactly one of 'delta', 'curve' or 'copyTo'.");
+            if (curve != null)
+                return new List<JToken> { curve };
+            if (copyTo != null)
+            {
+                if (copyTo.Count == 0)
+                    throw new ArgumentException("'copyTo' must list at least one {start, end}.");
+                return copyTo.ToList();
+            }
+
+            return null;
+        }
+
+        /// <summary>Copies one element in place (zero translation) and returns the copy of the same kind.</summary>
+        private static Element CopyInPlace(Document doc, Element source)
+        {
+            var copied = ElementTransformUtils.CopyElement(doc, source.Id, XYZ.Zero);
+            var match = copied.Select(doc.GetElement)
+                            .FirstOrDefault(e => e != null && e.GetType() == source.GetType()
+                                                 && e.GetTypeId() == source.GetTypeId())
+                        ?? copied.Select(doc.GetElement).FirstOrDefault(e => e != null);
+            return match ?? throw new InvalidOperationException($"Copying element {source.Id.GetValue()} returned nothing.");
         }
 
         private static XYZ ReadVector(JObject op, string name)
