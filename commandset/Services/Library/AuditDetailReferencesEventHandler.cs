@@ -106,7 +106,7 @@ namespace RevitMCPCommandSet.Services.Library
                 });
         }
 
-        private static AuditRow Classify(Document doc, ReferenceBubble bubble, ViewportIndex index,
+        internal static AuditRow Classify(Document doc, ReferenceBubble bubble, ViewportIndex index,
             DetailReferenceOptions options)
         {
             var instance = bubble.Instance;
@@ -183,7 +183,7 @@ namespace RevitMCPCommandSet.Services.Library
         }
 
         // Lower-case members: serialised as-is on the wire.
-        private sealed class AuditRow
+        internal sealed class AuditRow
         {
             public long bubbleId { get; set; }
             public string familyName { get; set; }
