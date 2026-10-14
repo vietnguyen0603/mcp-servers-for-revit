@@ -136,7 +136,7 @@ export const createFamilySchema = {
     .describe(
       "Template: 'foundation' (Metric Structural Foundation, default - piles, barrettes, footings), 'genericModel', " +
         "'column' (Metric Structural Column - section in plan, ends locked to the base/top levels) or " +
-        "'framing' (Metric Structural Framing - Beams and Braces - section in the end elevation, ends locked to Member Left/Right, section top on the Ref. Level)"
+        "'framing' (Metric Structural Framing - Beams and Braces - section in the end elevation, ends locked to Member Left/Right, section top on the Ref. Level - circle/pipe centred on it; the result's sectionTop is measured from the built solid)"
     ),
   shape: z
     .enum(["rectangular", "circular", "I", "box", "cruciform", "rect", "circle", "pipe", "polygon"])
