@@ -68,6 +68,17 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["copy", "transfer", "family", "families", "type", "reference model", "template", "library", "rfa", "system type", "floor type"],
   },
+  rename_families_types: {
+    catalogs: ["modify", "annotate"],
+    readOnly: false,
+    keywords: ["rename", "find replace", "prefix", "template clean-up", "TT", "AC", "family name", "type name", "system type", "text type", "dimension type", "viewport type", "regex", "office standards"],
+  },
+  merge_duplicate_families: {
+    catalogs: ["modify", "annotate"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["duplicate", "merge", "purge", "replace type", "swap type", "template clean-up", "dedupe", "identical families", "consolidate", "family types"],
+  },
   create_slabs: {
     catalogs: ["structure", "architecture"],
     readOnly: false,

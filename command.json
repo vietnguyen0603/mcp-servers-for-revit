@@ -384,6 +384,16 @@
       "assemblyPath": "RevitMCPCommandSet.dll"
     },
     {
+      "commandName": "rename_families_types",
+      "description": "Find/replace family, type and system type names (template clean-up) with collision and blocked-name reports",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
+      "commandName": "merge_duplicate_families",
+      "description": "Merge identical duplicate families/types (parameters + geometry fingerprint): switch instances, re-point references, delete duplicates",
+      "assemblyPath": "RevitMCPCommandSet.dll"
+    },
+    {
       "commandName": "create_grids",
       "description": "Create named grids from lines, arcs or an axes table (skip/error/replace existing)",
       "assemblyPath": "RevitMCPCommandSet.dll"
