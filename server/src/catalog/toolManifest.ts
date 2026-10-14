@@ -477,6 +477,12 @@ export const TOOL_MANIFEST: Record<string, ToolManifestEntry> = {
     readOnly: false,
     keywords: ["sheet", "layout", "grid", "module", "detail number", "viewport", "typical detail", "pack"],
   },
+  layout_detail_sheet_grid: {
+    catalogs: ["views"],
+    readOnly: false,
+    destructive: true,
+    keywords: ["sheet", "layout", "12-cell grid", "cell", "detail number", "renumber", "typical detail", "pack", "title line", "sheet series", "bubble", "reference", "verify"],
+  },
 
   // modify
   operate_element: {

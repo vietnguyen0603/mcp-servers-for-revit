@@ -214,6 +214,7 @@ Configure the behaviour with environment variables on the MCP server:
 | `set_view_range` | views | Set the view range of plan views |
 | `align_viewports` | views | Align viewports across sheets |
 | `update_viewports` | views | Renumber, retype, move, anchor and adjust titles of placed viewports |
+| `layout_detail_sheet_grid` | views | Re-lay out a typical-detail sheet series on the office 12-cell grid: measure, plan, apply (new sheets, detail numbers, reference remap; dry run by default) and verify |
 | `export_room_data` | analyze, architecture | Export all room data from the project |
 | `get_grid_register_data` | structure | Return register-ready grid data (one record per grid, axis family and coordinate in mm) |
 | `get_column_wall_register_data` | structure | Return register-ready column and wall data (one record per physical column or wall leg in mm) |
